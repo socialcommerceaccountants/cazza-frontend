@@ -1,25 +1,25 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { 
-  CheckCircle, 
-  XCircle, 
-  RefreshCw, 
-  ExternalLink, 
-  Settings, 
+import {
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  ExternalLink,
+  Settings,
   AlertTriangle,
   CreditCard,
   Building,
   FileText,
   PoundSterling,
   Shield,
-  Info
+  Info,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
@@ -45,115 +45,61 @@ interface XeroConnectionStatus {
   };
 }
 
+const DEFAULT_STATUS: XeroConnectionStatus = {
+  isConnected: false,
+  tenants: [],
+  lastSync: null,
+  syncStatus: 'idle',
+  ukCompliance: {
+    vatRegistered: false,
+    vatNumber: null,
+    companyNumber: null,
+    taxYearEnd: '',
+  },
+};
+
 export default function XeroOAuth() {
-  const [status, setStatus] = useState<XeroConnectionStatus>({
-    isConnected: false,
-    tenants: [],
-    lastSync: null,
-    syncStatus: 'idle',
-    ukCompliance: {
-      vatRegistered: false,
-      vatNumber: null,
-      companyNumber: null,
-      taxYearEnd: '2024-03-31',
-    },
-  });
+  const [status, setStatus] = useState<XeroConnectionStatus>(DEFAULT_STATUS);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState(0);
   const { toast } = useToast();
+
+  const fetchXeroStatus = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await apiClient.get<XeroConnectionStatus>('/integrations/xero/status');
+      setStatus(data);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to load Xero connection status';
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      });
+      setStatus(DEFAULT_STATUS);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     fetchXeroStatus();
-  }, []);
-
-  const fetchXeroStatus = async () => {
-    try {
-      setIsLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await apiClient.get('/api/integrations/xero/status');
-      // setStatus(response.data);
-      
-      // Mock data for now
-      setTimeout(() => {
-        setStatus({
-          isConnected: Math.random() > 0.5,
-          tenants: Math.random() > 0.5 ? [
-            {
-              id: 'tenant-1',
-              name: 'Demo Company Ltd',
-              connectedAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-              expiresAt: new Date(Date.now() + 86400000 * 30).toISOString(),
-              lastRefreshed: new Date().toISOString(),
-            },
-            {
-              id: 'tenant-2',
-              name: 'Test Business Ltd',
-              connectedAt: new Date(Date.now() - 86400000 * 14).toISOString(),
-              expiresAt: new Date(Date.now() + 86400000 * 45).toISOString(),
-              lastRefreshed: new Date(Date.now() - 86400000).toISOString(),
-            },
-          ] : [],
-          lastSync: Math.random() > 0.5 ? new Date().toISOString() : null,
-          syncStatus: 'idle',
-          ukCompliance: {
-            vatRegistered: true,
-            vatNumber: 'GB123456789',
-            companyNumber: '12345678',
-            taxYearEnd: '2024-03-31',
-          },
-        });
-        setIsLoading(false);
-      }, 1000);
-    } catch (error) {
-      console.error('Failed to fetch Xero status:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load Xero connection status',
-        variant: 'destructive',
-      });
-      setIsLoading(false);
-    }
-  };
+  }, [fetchXeroStatus]);
 
   const handleConnect = async () => {
     try {
       setIsConnecting(true);
-      
-      // TODO: Implement actual Xero OAuth flow
-      // const response = await apiClient.get('/api/integrations/xero/auth-url');
-      // window.location.href = response.data.url;
-      
-      // Mock OAuth flow
-      toast({
-        title: 'Redirecting to Xero',
-        description: 'You will be redirected to Xero to authorize access',
-      });
-
-      setTimeout(() => {
-        setStatus(prev => ({
-          ...prev,
-          isConnected: true,
-          tenants: [
-            {
-              id: 'new-tenant',
-              name: 'New Company Ltd',
-              connectedAt: new Date().toISOString(),
-              expiresAt: new Date(Date.now() + 86400000 * 60).toISOString(),
-              lastRefreshed: new Date().toISOString(),
-            },
-          ],
-        }));
-        setIsConnecting(false);
-        toast({
-          title: 'Connected to Xero',
-          description: 'Successfully connected to Xero Accounting',
-        });
-      }, 2000);
-    } catch (error) {
+      const { url } = await apiClient.get<{ url: string }>('/integrations/xero/auth-url');
+      // Redirect to Xero OAuth — the callback will return the user to this page
+      window.location.href = url;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to connect to Xero';
       toast({
         title: 'Connection Failed',
-        description: 'Failed to connect to Xero',
+        description: message,
         variant: 'destructive',
       });
       setIsConnecting(false);
@@ -162,101 +108,85 @@ export default function XeroOAuth() {
 
   const handleDisconnect = async (tenantId?: string) => {
     try {
-      // TODO: Implement actual disconnect
-      // await apiClient.post('/api/integrations/xero/disconnect', { tenantId });
-      
       if (tenantId) {
-        // Disconnect specific tenant
-        setStatus(prev => ({
+        await apiClient.delete(`/integrations/xero/tenants/${tenantId}/disconnect`);
+        setStatus((prev) => ({
           ...prev,
-          tenants: prev.tenants.filter(tenant => tenant.id !== tenantId),
+          tenants: prev.tenants.filter((t) => t.id !== tenantId),
+          isConnected: prev.tenants.length > 1,
         }));
-        toast({
-          title: 'Tenant Disconnected',
-          description: 'Successfully disconnected from Xero tenant',
-        });
+        toast({ title: 'Tenant Disconnected', description: 'Successfully disconnected Xero tenant.' });
       } else {
-        // Disconnect all
-        setStatus(prev => ({
-          ...prev,
-          isConnected: false,
-          tenants: [],
-        }));
-        toast({
-          title: 'Disconnected',
-          description: 'Successfully disconnected from Xero',
-        });
+        await apiClient.post('/integrations/xero/disconnect');
+        setStatus(DEFAULT_STATUS);
+        toast({ title: 'Disconnected', description: 'Successfully disconnected from Xero.' });
       }
-    } catch (error) {
-      toast({
-        title: 'Disconnect Failed',
-        description: 'Failed to disconnect from Xero',
-        variant: 'destructive',
-      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to disconnect from Xero';
+      toast({ title: 'Disconnect Failed', description: message, variant: 'destructive' });
     }
   };
 
   const handleSync = async () => {
     try {
       setIsSyncing(true);
-      setStatus(prev => ({ ...prev, syncStatus: 'in_progress' }));
-      
-      // TODO: Implement actual sync
-      // await apiClient.post('/api/integrations/xero/sync');
-      
-      // Mock sync
-      setTimeout(() => {
-        setStatus(prev => ({
-          ...prev,
-          syncStatus: 'success',
-          lastSync: new Date().toISOString(),
-        }));
-        setIsSyncing(false);
-        toast({
-          title: 'Sync Complete',
-          description: 'Successfully synced data from Xero',
-        });
+      setSyncProgress(0);
+      setStatus((prev) => ({ ...prev, syncStatus: 'in_progress' }));
+
+      await apiClient.post('/integrations/xero/sync');
+
+      // Poll sync status until complete
+      const pollInterval = setInterval(async () => {
+        try {
+          const updated = await apiClient.get<XeroConnectionStatus>('/integrations/xero/status');
+          if (updated.syncStatus === 'success' || updated.syncStatus === 'failed') {
+            clearInterval(pollInterval);
+            setStatus(updated);
+            setSyncProgress(updated.syncStatus === 'success' ? 100 : 0);
+            setIsSyncing(false);
+            if (updated.syncStatus === 'success') {
+              toast({ title: 'Sync Complete', description: 'Successfully synced data from Xero.' });
+            } else {
+              toast({ title: 'Sync Failed', description: 'Xero sync encountered errors.', variant: 'destructive' });
+            }
+          } else {
+            // Increment progress estimate while waiting
+            setSyncProgress((prev) => Math.min(prev + 10, 90));
+          }
+        } catch {
+          clearInterval(pollInterval);
+          setIsSyncing(false);
+          setStatus((prev) => ({ ...prev, syncStatus: 'failed' }));
+          toast({ title: 'Sync Failed', description: 'Lost connection during sync.', variant: 'destructive' });
+        }
       }, 3000);
-    } catch (error) {
-      setStatus(prev => ({ ...prev, syncStatus: 'failed' }));
+    } catch (error: unknown) {
+      setStatus((prev) => ({ ...prev, syncStatus: 'failed' }));
       setIsSyncing(false);
-      toast({
-        title: 'Sync Failed',
-        description: 'Failed to sync data from Xero',
-        variant: 'destructive',
-      });
+      const message = error instanceof Error ? error.message : 'Failed to sync data from Xero';
+      toast({ title: 'Sync Failed', description: message, variant: 'destructive' });
     }
   };
 
   const handleRefreshToken = async (tenantId: string) => {
     try {
-      // TODO: Implement token refresh
-      // await apiClient.post('/api/integrations/xero/refresh', { tenantId });
-      
-      toast({
-        title: 'Token Refreshed',
-        description: 'Successfully refreshed Xero access token',
-      });
-      
-      // Update UI
-      setStatus(prev => ({
+      await apiClient.post('/integrations/xero/refresh', { tenantId });
+      setStatus((prev) => ({
         ...prev,
-        tenants: prev.tenants.map(tenant => 
-          tenant.id === tenantId 
-            ? { 
-                ...tenant, 
+        tenants: prev.tenants.map((tenant) =>
+          tenant.id === tenantId
+            ? {
+                ...tenant,
                 lastRefreshed: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + 86400000 * 60).toISOString(),
               }
             : tenant
         ),
       }));
-    } catch (error) {
-      toast({
-        title: 'Refresh Failed',
-        description: 'Failed to refresh Xero token',
-        variant: 'destructive',
-      });
+      toast({ title: 'Token Refreshed', description: 'Successfully refreshed Xero access token.' });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to refresh Xero token';
+      toast({ title: 'Refresh Failed', description: message, variant: 'destructive' });
     }
   };
 
@@ -265,9 +195,7 @@ export default function XeroOAuth() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Xero Accounting</h1>
-          <p className="text-muted-foreground">
-            UK accounting integration with automatic transaction sync
-          </p>
+          <p className="text-muted-foreground">UK accounting integration with automatic transaction sync</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={fetchXeroStatus} variant="outline" disabled={isLoading}>
@@ -291,9 +219,7 @@ export default function XeroOAuth() {
                 <CreditCard className="h-5 w-5 mr-2" />
                 Connection Status
               </CardTitle>
-              <CardDescription>
-                Manage your Xero accounting connection
-              </CardDescription>
+              <CardDescription>Manage your Xero accounting connection</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -304,7 +230,7 @@ export default function XeroOAuth() {
                   <div>
                     <div className="font-medium">Xero Accounting</div>
                     <div className="text-sm text-muted-foreground">
-                      {status.isConnected ? 'Connected' : 'Not Connected'}
+                      {isLoading ? 'Loading...' : status.isConnected ? 'Connected' : 'Not Connected'}
                     </div>
                   </div>
                 </div>
@@ -326,11 +252,7 @@ export default function XeroOAuth() {
                         {status.tenants.length} Xero organisation(s) connected
                       </p>
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleDisconnect()}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => handleDisconnect()}>
                       <XCircle className="h-4 w-4 mr-2" />
                       Disconnect All
                     </Button>
@@ -349,23 +271,25 @@ export default function XeroOAuth() {
                           </div>
                         </div>
                         <div className="flex space-x-2">
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleRefreshToken(tenant.id)}
+                            title="Refresh token"
                           >
                             <RefreshCw className="h-4 w-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => handleDisconnect(tenant.id)}
+                            title="Disconnect tenant"
                           >
                             <XCircle className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-muted-foreground">Token expires:</span>
@@ -386,13 +310,9 @@ export default function XeroOAuth() {
                   <p className="text-muted-foreground mb-6">
                     Connect your Xero account to sync transactions and manage UK accounting
                   </p>
-                  <Button 
-                    onClick={handleConnect} 
-                    disabled={isConnecting}
-                    size="lg"
-                  >
+                  <Button onClick={handleConnect} disabled={isConnecting || isLoading} size="lg">
                     <ExternalLink className="h-5 w-5 mr-2" />
-                    {isConnecting ? 'Connecting...' : 'Connect to Xero'}
+                    {isConnecting ? 'Redirecting to Xero...' : 'Connect to Xero'}
                   </Button>
                 </div>
               )}
@@ -401,9 +321,9 @@ export default function XeroOAuth() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span>Syncing data from Xero...</span>
-                    <span>50%</span>
+                    <span>{syncProgress}%</span>
                   </div>
-                  <Progress value={50} />
+                  <Progress value={syncProgress} />
                 </div>
               )}
             </CardContent>
@@ -420,16 +340,14 @@ export default function XeroOAuth() {
                 <FileText className="h-5 w-5 mr-2" />
                 UK Accounting Standards
               </CardTitle>
-              <CardDescription>
-                Compliance with UK accounting and tax regulations
-              </CardDescription>
+              <CardDescription>Compliance with UK accounting and tax regulations</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertTitle>UK Compliance Ready</AlertTitle>
                 <AlertDescription>
-                  This integration automatically handles UK VAT rates, corporation tax thresholds, 
+                  This integration automatically handles UK VAT rates, corporation tax thresholds,
                   and HMRC reporting requirements.
                 </AlertDescription>
               </Alert>
@@ -476,10 +394,12 @@ export default function XeroOAuth() {
                         <span className="font-mono">{status.ukCompliance.companyNumber}</span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span>Tax Year End:</span>
-                      <span>{status.ukCompliance.taxYearEnd}</span>
-                    </div>
+                    {status.ukCompliance.taxYearEnd && (
+                      <div className="flex justify-between">
+                        <span>Tax Year End:</span>
+                        <span>{status.ukCompliance.taxYearEnd}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span>Corporation Tax (Small):</span>
                       <span>19%</span>
@@ -503,7 +423,7 @@ export default function XeroOAuth() {
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                    UK tax year alignment (April 6 - April 5)
+                    UK tax year alignment (April 6 – April 5)
                   </li>
                   <li className="flex items-center">
                     <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
@@ -559,8 +479,8 @@ export default function XeroOAuth() {
               <div className="space-y-2">
                 <h4 className="font-medium">Data Protection</h4>
                 <p className="text-sm text-muted-foreground">
-                  All Xero credentials are encrypted and stored securely. 
-                  We only request read-only access to your accounting data.
+                  All Xero credentials are encrypted and stored securely. We only request
+                  read-only access to your accounting data.
                 </p>
               </div>
 
@@ -568,8 +488,8 @@ export default function XeroOAuth() {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Important</AlertTitle>
                 <AlertDescription className="text-sm">
-                  Disconnecting will remove access to your Xero data. 
-                  Historical data already synced will be retained according to your data retention settings.
+                  Disconnecting will remove access to your Xero data. Historical data already
+                  synced will be retained according to your data retention settings.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -580,21 +500,35 @@ export default function XeroOAuth() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="outline" className="w-full justify-start" disabled={!status.isConnected}>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                disabled={!status.isConnected}
+              >
                 <FileText className="h-4 w-4 mr-2" />
                 Export Transactions
               </Button>
-              <Button variant="outline" className="w-full justify-start" disabled={!status.isConnected}>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                disabled={!status.isConnected}
+              >
                 <Settings className="h-4 w-4 mr-2" />
                 Configure Sync Rules
               </Button>
-              <Button variant="outline" className="w-full justify-start" disabled={!status.isConnected}>
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                disabled={!status.isConnected}
+              >
                 <AlertTriangle className="h-4 w-4 mr-2" />
                 View Sync Errors
               </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Xero Developer Portal
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <a href="https://developer.xero.com" target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Xero Developer Portal
+                </a>
               </Button>
             </CardContent>
           </Card>
@@ -614,15 +548,24 @@ export default function XeroOAuth() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Status:</span>
-                    <Badge className={
-                      status.syncStatus === 'success' ? 'bg-green-100 text-green-800' :
-                      status.syncStatus === 'failed' ? 'bg-red-100 text-red-800' :
-                      status.syncStatus === 'in_progress' ? 'bg-blue-100 text-blue-800' :
-                      'bg-gray-100 text-gray-800'
-                    }>
-                      {status.syncStatus === 'success' ? 'Up to date' :
-                       status.syncStatus === 'failed' ? 'Sync failed' :
-                       status.syncStatus === 'in_progress' ? 'Syncing...' : 'Ready'}
+                    <Badge
+                      className={
+                        status.syncStatus === 'success'
+                          ? 'bg-green-100 text-green-800'
+                          : status.syncStatus === 'failed'
+                          ? 'bg-red-100 text-red-800'
+                          : status.syncStatus === 'in_progress'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }
+                    >
+                      {status.syncStatus === 'success'
+                        ? 'Up to date'
+                        : status.syncStatus === 'failed'
+                        ? 'Sync failed'
+                        : status.syncStatus === 'in_progress'
+                        ? 'Syncing...'
+                        : 'Ready'}
                     </Badge>
                   </div>
                   <div className="flex justify-between text-sm">

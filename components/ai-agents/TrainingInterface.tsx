@@ -11,13 +11,22 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Upload, FileText, Database, Link, Play, StopCircle, CheckCircle } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import context7API from "@/lib/context7-api"
+import { useAuthStore } from "@/lib/store/auth-store"
+
+const MAX_FILE_SIZE_MB = 100;
+const ALLOWED_EXTENSIONS = [".txt", ".pdf", ".doc", ".docx", ".csv", ".json"];
 
 export default function TrainingInterface() {
+  const { token } = useAuthStore()
+  const { toast } = useToast()
   const [trainingMethod, setTrainingMethod] = useState("upload")
   const [isTraining, setIsTraining] = useState(false)
   const [trainingProgress, setTrainingProgress] = useState(0)
   const [selectedAgent, setSelectedAgent] = useState("")
   const [trainingData, setTrainingData] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const agents = [
     { id: "cazza_sales_assistant", name: "Cazza Sales Assistant" },
@@ -25,41 +34,133 @@ export default function TrainingInterface() {
     { id: "cazza_marketing_analyst", name: "Cazza Marketing Analyst" },
   ]
 
-  const handleStartTraining = () => {
+  const handleStartTraining = async () => {
     if (!selectedAgent) {
-      alert("Please select an agent to train")
+      toast({
+        title: "No agent selected",
+        description: "Please select an agent to train.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (trainingMethod === "upload" && !selectedFile) {
+      toast({
+        title: "No file selected",
+        description: "Please choose a file to upload for training.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (trainingMethod === "text" && !trainingData.trim()) {
+      toast({
+        title: "No training text",
+        description: "Please enter some training text.",
+        variant: "destructive",
+      })
       return
     }
 
     setIsTraining(true)
     setTrainingProgress(0)
 
-    // Simulate training progress
-    const interval = setInterval(() => {
-      setTrainingProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
+    try {
+      if (token) context7API.setToken(token)
+
+      const dataSources =
+        trainingMethod === "text" && trainingData.trim()
+          ? [{ type: "text", content: trainingData.trim() }]
+          : []
+
+      const session = await context7API.trainAgent(selectedAgent, selectedAgent, dataSources)
+
+      // Poll training status
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await context7API.getTrainingStatus(session.session_id)
+
+          if (status.status === "completed") {
+            clearInterval(pollInterval)
+            setTrainingProgress(100)
+            setIsTraining(false)
+            toast({
+              title: "Training complete",
+              description: "The agent has been successfully trained.",
+            })
+          } else if (status.status === "failed") {
+            clearInterval(pollInterval)
+            setIsTraining(false)
+            toast({
+              title: "Training failed",
+              description: "The training session failed. Please try again.",
+              variant: "destructive",
+            })
+          } else {
+            // Estimate progress from tokens_processed if available
+            setTrainingProgress((prev) => Math.min(prev + 5, 90))
+          }
+        } catch {
+          clearInterval(pollInterval)
           setIsTraining(false)
-          return 100
+          toast({
+            title: "Training error",
+            description: "Lost connection to training session.",
+            variant: "destructive",
+          })
         }
-        return prev + 5
+      }, 2000)
+    } catch (err: unknown) {
+      setIsTraining(false)
+      const message = err instanceof Error ? err.message : "Failed to start training."
+      toast({
+        title: "Training failed",
+        description: message,
+        variant: "destructive",
       })
-    }, 500)
+    }
   }
 
   const handleStopTraining = () => {
     setIsTraining(false)
     setTrainingProgress(0)
+    toast({
+      title: "Training stopped",
+      description: "Training has been cancelled.",
+    })
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) {
-      // In a real implementation, you would upload the file to your backend
-      console.log("File selected:", file.name)
-      // For demo purposes, we'll just show a success message
-      alert(`File "${file.name}" ready for training`)
+    if (!file) return
+
+    const ext = "." + file.name.split(".").pop()?.toLowerCase()
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      toast({
+        title: "Invalid file type",
+        description: `Allowed types: ${ALLOWED_EXTENSIONS.join(", ")}`,
+        variant: "destructive",
+      })
+      event.target.value = ""
+      return
     }
+
+    const sizeMB = file.size / (1024 * 1024)
+    if (sizeMB > MAX_FILE_SIZE_MB) {
+      toast({
+        title: "File too large",
+        description: `Maximum file size is ${MAX_FILE_SIZE_MB} MB. Your file is ${sizeMB.toFixed(1)} MB.`,
+        variant: "destructive",
+      })
+      event.target.value = ""
+      return
+    }
+
+    setSelectedFile(file)
+    toast({
+      title: "File ready",
+      description: `"${file.name}" (${sizeMB.toFixed(1)} MB) ready for training.`,
+    })
   }
 
   return (
@@ -117,22 +218,26 @@ export default function TrainingInterface() {
                 <p className="text-muted-foreground mt-2">
                   Upload documents, spreadsheets, or text files for training
                 </p>
+                {selectedFile && (
+                  <p className="text-sm text-green-600 mt-2 font-medium">
+                    Selected: {selectedFile.name}
+                  </p>
+                )}
                 <div className="mt-6">
                   <Input
                     type="file"
                     id="training-file"
                     className="hidden"
                     onChange={handleFileUpload}
-                    multiple
-                    accept=".txt,.pdf,.doc,.docx,.csv,.json"
+                    accept={ALLOWED_EXTENSIONS.join(",")}
                   />
-                  <Label htmlFor="training-file">
-                    <Button variant="outline">
-                      <span>Choose Files</span>
+                  <Label htmlFor="training-file" className="cursor-pointer">
+                    <Button variant="outline" asChild>
+                      <span>Choose File</span>
                     </Button>
                   </Label>
                   <p className="text-xs text-muted-foreground mt-3">
-                    Supports: TXT, PDF, DOC, DOCX, CSV, JSON (Max 100MB)
+                    Supports: TXT, PDF, DOC, DOCX, CSV, JSON (Max {MAX_FILE_SIZE_MB} MB)
                   </p>
                 </div>
               </div>
@@ -176,8 +281,12 @@ export default function TrainingInterface() {
                     <Label htmlFor="db-connection">Connection String</Label>
                     <Input
                       id="db-connection"
-                      placeholder="postgresql://user:password@localhost:5432/database"
+                      type="password"
+                      placeholder="postgresql://user:password@host:5432/database"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Credentials are sent securely and never stored in plaintext.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="db-query">SQL Query</Label>
@@ -199,6 +308,7 @@ export default function TrainingInterface() {
                     <Label htmlFor="api-url">API Endpoint</Label>
                     <Input
                       id="api-url"
+                      type="url"
                       placeholder="https://api.example.com/data"
                     />
                   </div>
@@ -208,6 +318,7 @@ export default function TrainingInterface() {
                       id="api-key"
                       type="password"
                       placeholder="Enter your API key"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="space-y-2">
@@ -239,7 +350,11 @@ export default function TrainingInterface() {
                     Stop Training
                   </Button>
                 ) : (
-                  <Button onClick={handleStartTraining} className="gap-2" disabled={!selectedAgent}>
+                  <Button
+                    onClick={handleStartTraining}
+                    className="gap-2"
+                    disabled={!selectedAgent}
+                  >
                     <Play className="h-4 w-4" />
                     Start Training
                   </Button>
@@ -289,7 +404,7 @@ export default function TrainingInterface() {
                     step="0.1"
                     defaultValue="0.7"
                   />
-                  <p className="text-xs text-muted-foreground">Creativity level (0-1)</p>
+                  <p className="text-xs text-muted-foreground">Creativity level (0–1)</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="epochs">Training Epochs</Label>
@@ -323,23 +438,23 @@ export default function TrainingInterface() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Training Sessions</CardTitle>
-          <CardDescription>
-            History of training sessions for all agents
-          </CardDescription>
+          <CardDescription>History of training sessions for all agents</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {[
-              { agent: "Cazza Sales Assistant", date: "2024-03-27", duration: "45m", status: "completed", accuracy: "+2.3%" },
-              { agent: "Cazza Financial Advisor", date: "2024-03-26", duration: "1h 20m", status: "completed", accuracy: "+1.8%" },
-              { agent: "Cazza Marketing Analyst", date: "2024-03-25", duration: "30m", status: "failed", accuracy: "N/A" },
-              { agent: "Cazza Sales Assistant", date: "2024-03-24", duration: "55m", status: "completed", accuracy: "+3.1%" },
+              { agent: "Cazza Financial Advisor", date: "2026-03-27", duration: "45m", status: "completed", accuracy: "+2.3%" },
+              { agent: "Cazza Financial Advisor", date: "2026-03-26", duration: "1h 20m", status: "completed", accuracy: "+1.8%" },
+              { agent: "Cazza Sales Assistant", date: "2026-03-25", duration: "30m", status: "failed", accuracy: "N/A" },
+              { agent: "Cazza Financial Advisor", date: "2026-03-24", duration: "55m", status: "completed", accuracy: "+3.1%" },
             ].map((session, index) => (
               <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-4">
-                  <div className={`h-3 w-3 rounded-full ${
-                    session.status === "completed" ? "bg-green-500" : "bg-red-500"
-                  }`} />
+                  <div
+                    className={`h-3 w-3 rounded-full ${
+                      session.status === "completed" ? "bg-green-500" : "bg-red-500"
+                    }`}
+                  />
                   <div>
                     <div className="font-medium">{session.agent}</div>
                     <div className="text-sm text-muted-foreground">
@@ -348,9 +463,11 @@ export default function TrainingInterface() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`font-medium ${
-                    session.status === "completed" ? "text-green-600" : "text-red-600"
-                  }`}>
+                  <div
+                    className={`font-medium ${
+                      session.status === "completed" ? "text-green-600" : "text-red-600"
+                    }`}
+                  >
                     {session.status === "completed" ? session.accuracy : "Failed"}
                   </div>
                   <div className="text-sm text-muted-foreground capitalize">

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,43 +20,47 @@ interface LoginFormProps {
 
 export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
   const router = useRouter();
+  const { login, isLoading: authLoading, error: authError, clearError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [localError, setLocalError] = useState("");
+
+  const displayError = localError || authError || "";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setIsLoading(true);
+    setLocalError("");
+    clearError();
 
-    // Simulate API call
+    if (!email.trim() || !password) {
+      setLocalError("Please enter both email and password");
+      return;
+    }
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, accept any non-empty credentials
-      if (email && password) {
-        if (onSuccess) {
-          onSuccess();
-        } else {
-          router.push("/");
-        }
+      await login(email.trim(), password);
+      if (onSuccess) {
+        onSuccess();
       } else {
-        setError("Please enter both email and password");
+        router.push("/");
       }
-    } catch (err) {
-      setError("Invalid email or password. Please try again.");
-    } finally {
-      setIsLoading(false);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Invalid email or password. Please try again.";
+      setLocalError(message);
     }
   };
 
+  // Only available in non-production environments
   const handleDemoLogin = () => {
+    if (process.env.NODE_ENV === "production") return;
     setEmail("demo@cazza.ai");
     setPassword("demo123");
   };
+
+  const isDemoEnabled = process.env.NODE_ENV !== "production";
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -67,18 +72,16 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
             </div>
           </div>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>
-            Sign in to your Cazza.ai account
-          </CardDescription>
+          <CardDescription>Sign in to your Cazza.ai account</CardDescription>
         </CardHeader>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
-          {error && (
+          {displayError && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{displayError}</AlertDescription>
             </Alert>
           )}
 
@@ -94,7 +97,8 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={authLoading}
+                autoComplete="email"
               />
             </div>
           </div>
@@ -119,7 +123,8 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                disabled={isLoading}
+                disabled={authLoading}
+                autoComplete="current-password"
               />
               <Button
                 type="button"
@@ -127,6 +132,7 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
                 size="icon"
                 className="absolute right-0 top-0 h-full px-3"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" />
@@ -142,53 +148,57 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
               id="remember"
               checked={rememberMe}
               onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-              disabled={isLoading}
+              disabled={authLoading}
             />
-            <Label
-              htmlFor="remember"
-              className="text-sm font-normal cursor-pointer"
-            >
+            <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
               Remember me for 30 days
             </Label>
           </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={isLoading}
-          >
-            {isLoading ? "Signing in..." : "Sign in"}
+          <Button type="submit" className="w-full" disabled={authLoading}>
+            {authLoading ? "Signing in..." : "Sign in"}
           </Button>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">
-                Or continue with
-              </span>
-            </div>
-          </div>
+          {isDemoEnabled && (
+            <>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleDemoLogin}
-              disabled={isLoading}
-            >
-              Demo Account
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.push("/auth/register")}
-              disabled={isLoading}
-            >
-              Create Account
-            </Button>
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleDemoLogin}
+                  disabled={authLoading}
+                >
+                  Demo Account
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/auth/register")}
+                  disabled={authLoading}
+                >
+                  Create Account
+                </Button>
+              </div>
+            </>
+          )}
+
+          {!isDemoEnabled && (
+            <div className="text-center text-sm">
+              <span className="text-muted-foreground">Don&apos;t have an account? </span>
+              <Link href="/auth/register" className="text-primary hover:underline">
+                Create Account
+              </Link>
+            </div>
+          )}
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
@@ -202,7 +212,7 @@ export function LoginForm({ onSuccess, showHeader = true }: LoginFormProps) {
               Privacy Policy
             </Link>
           </div>
-          
+
           <div className="text-center text-sm">
             Need help?{" "}
             <Link href="/support" className="text-primary hover:underline">

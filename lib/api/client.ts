@@ -5,7 +5,7 @@ export class ApiError extends Error {
     message: string,
     public status?: number,
     public code?: string,
-    public details?: any
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'ApiError';
@@ -24,16 +24,28 @@ class ApiClient {
     };
   }
 
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return useAuthStore.getState().token;
+  }
+
+  private getFullUrl(endpoint: string): string {
+    return `${this.baseURL}/${process.env.NEXT_PUBLIC_API_VERSION || 'v1'}${endpoint}`;
+  }
+
+  private handleUnauthorized(): void {
+    if (typeof window === 'undefined') return;
+    useAuthStore.getState().logout();
+    window.location.href = '/login';
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const url = `${this.baseURL}/${process.env.NEXT_PUBLIC_API_VERSION || 'v1'}${endpoint}`;
-    
-    // Get auth token from store
-    const authStore = typeof window !== 'undefined' ? useAuthStore.getState() : null;
-    const token = authStore?.token;
-    
+    const url = this.getFullUrl(endpoint);
+    const token = this.getAuthToken();
+
     const headers: Record<string, string> = {
       ...this.defaultHeaders,
       ...(options.headers as Record<string, string> || {}),
@@ -52,18 +64,13 @@ class ApiClient {
     try {
       const response = await fetch(url, config);
 
-      // Handle unauthorized responses
       if (response.status === 401) {
-        if (typeof window !== 'undefined' && authStore) {
-          authStore.logout();
-          window.location.href = '/login';
-        }
+        this.handleUnauthorized();
         throw new ApiError('Unauthorized', 401, 'UNAUTHORIZED');
       }
 
-      // Handle other error responses
       if (!response.ok) {
-        let errorData;
+        let errorData: { message?: string; code?: string; details?: Record<string, unknown> };
         try {
           errorData = await response.json();
         } catch {
@@ -78,7 +85,6 @@ class ApiClient {
         );
       }
 
-      // Handle empty responses
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         return await response.json();
@@ -89,8 +95,7 @@ class ApiClient {
       if (error instanceof ApiError) {
         throw error;
       }
-      
-      // Network errors or other fetch failures
+
       throw new ApiError(
         error instanceof Error ? error.message : 'Network error',
         0,
@@ -99,12 +104,11 @@ class ApiClient {
     }
   }
 
-  // HTTP methods
   async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
-  async post<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
@@ -112,7 +116,7 @@ class ApiClient {
     });
   }
 
-  async put<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PUT',
@@ -120,7 +124,7 @@ class ApiClient {
     });
   }
 
-  async patch<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+  async patch<T>(endpoint: string, data?: unknown, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PATCH',
@@ -132,28 +136,28 @@ class ApiClient {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 
-  // File upload helper
   async upload<T>(endpoint: string, file: File, fieldName = 'file'): Promise<T> {
     const formData = new FormData();
     formData.append(fieldName, file);
 
+    const token = this.getAuthToken();
     const headers: Record<string, string> = {};
-    const authStore = typeof window !== 'undefined' ? useAuthStore.getState() : null;
-    const token = authStore?.token;
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(
-      `${this.baseURL}/${process.env.NEXT_PUBLIC_API_VERSION || 'v1'}${endpoint}`,
-      {
-        method: 'POST',
-        headers,
-        body: formData,
-        credentials: 'include',
-      }
-    );
+    const response = await fetch(this.getFullUrl(endpoint), {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'include',
+    });
+
+    if (response.status === 401) {
+      this.handleUnauthorized();
+      throw new ApiError('Unauthorized', 401, 'UNAUTHORIZED');
+    }
 
     if (!response.ok) {
       throw new ApiError(`Upload failed: ${response.statusText}`, response.status);
@@ -163,10 +167,6 @@ class ApiClient {
   }
 }
 
-// Create singleton instance
 export const apiClient = new ApiClient();
 
-// React hook for API client (optional, for components that need direct access)
-export const useApiClient = () => {
-  return apiClient;
-};
+export const useApiClient = () => apiClient;

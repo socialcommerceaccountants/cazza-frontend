@@ -227,12 +227,14 @@ export const useAuth = () => {
   };
 };
 
-// Hook for protected routes
+// Hook for protected routes — redirectTo must be a relative path to prevent open redirects
 export const useRequireAuth = (redirectTo = '/login') => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (typeof window !== 'undefined' && !isLoading && !isAuthenticated) {
-    window.location.href = redirectTo;
+    // Guard against open redirects: only allow relative paths
+    const safePath = redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/login';
+    window.location.href = safePath;
   }
 
   return { isAuthenticated, isLoading };
