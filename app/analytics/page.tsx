@@ -11,7 +11,8 @@ import PlatformPerformance from "@/components/analytics/PlatformPerformance";
 import RealTimeMetrics from "@/components/analytics/RealTimeMetrics";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, Calculator, TrendingUp, PieChart, Activity } from "lucide-react";
+import { BarChart3, Calculator, TrendingUp, PieChart, Activity, Target, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 // Create a client
 const queryClient = new QueryClient({
@@ -35,7 +36,7 @@ function AnalyticsDashboardContent() {
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-5">
+        <TabsList className="grid w-full max-w-3xl grid-cols-6">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Overview
@@ -55,6 +56,10 @@ function AnalyticsDashboardContent() {
           <TabsTrigger value="realtime" className="flex items-center gap-2">
             <Activity className="h-4 w-4" />
             Real-time
+          </TabsTrigger>
+          <TabsTrigger value="advanced" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Advanced
           </TabsTrigger>
         </TabsList>
 
@@ -264,6 +269,55 @@ function AnalyticsDashboardContent() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="advanced" className="space-y-8">
+          <Card className="border-2 border-dashed">
+            <CardContent className="p-12">
+              <div className="text-center space-y-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+                  <Target className="h-8 w-8 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold mb-2">Advanced Analytics Suite</h3>
+                  <p className="text-muted-foreground max-w-2xl mx-auto">
+                    Access our comprehensive advanced analytics platform featuring predictive forecasting, 
+                    custom report building, executive dashboards, and real-time anomaly detection.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-3xl mx-auto">
+                    <div className="border rounded-lg p-4 text-center">
+                      <TrendingUp className="h-6 w-6 mx-auto mb-2 text-blue-500" />
+                      <p className="font-medium">Predictive Analytics</p>
+                      <p className="text-sm text-muted-foreground">AI-powered forecasting</p>
+                    </div>
+                    <div className="border rounded-lg p-4 text-center">
+                      <BarChart3 className="h-6 w-6 mx-auto mb-2 text-green-500" />
+                      <p className="font-medium">Custom Reports</p>
+                      <p className="text-sm text-muted-foreground">Drag-and-drop builder</p>
+                    </div>
+                    <div className="border rounded-lg p-4 text-center">
+                      <Target className="h-6 w-6 mx-auto mb-2 text-purple-500" />
+                      <p className="font-medium">Executive Dashboard</p>
+                      <p className="text-sm text-muted-foreground">KPI tracking & insights</p>
+                    </div>
+                    <div className="border rounded-lg p-4 text-center">
+                      <Activity className="h-6 w-6 mx-auto mb-2 text-red-500" />
+                      <p className="font-medium">Anomaly Detection</p>
+                      <p className="text-sm text-muted-foreground">Real-time alerts</p>
+                    </div>
+                  </div>
+                  <Link href="/analytics/advanced">
+                    <Button size="lg" className="mt-4">
+                      Launch Advanced Analytics
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

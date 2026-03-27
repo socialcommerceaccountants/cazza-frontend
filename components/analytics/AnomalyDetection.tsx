@@ -25,7 +25,7 @@ import {
   RefreshCw,
   Mail,
   MessageSquare,
-  Slack,
+  Bell,
   Zap,
   TrendingUp,
   TrendingDown,
@@ -279,7 +279,7 @@ export default function AnomalyDetection({ onAlert, onRuleChange }: AnomalyDetec
   const getChannelIcon = (type: string) => {
     switch (type) {
       case 'email': return <Mail className="h-4 w-4" />;
-      case 'slack': return <Slack className="h-4 w-4" />;
+      case 'slack': return <Bell className="h-4 w-4" />;
       case 'webhook': return <Zap className="h-4 w-4" />;
       case 'sms': return <MessageSquare className="h-4 w-4" />;
       default: return <Bell className="h-4 w-4" />;
