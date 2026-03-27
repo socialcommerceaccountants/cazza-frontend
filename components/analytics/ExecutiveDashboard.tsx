@@ -199,7 +199,7 @@ const riskData = [
   { category: 'Technology Risk', score: 38, trend: 'down' },
 ];
 
-export default function ExecutiveDashboard({ 
+export default function ExecutiveDashboard({
   timeRange = 'month',
   department = 'all'
 }: ExecutiveDashboardProps) {
@@ -207,13 +207,13 @@ export default function ExecutiveDashboard({
   const [initiatives, setInitiatives] = useState<Initiative[]>(generateInitiatives());
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  
+
   const overallProgress = initiatives.reduce((sum, i) => sum + i.progress, 0) / initiatives.length;
   const onTrackKPIs = kpis.filter(k => k.status === 'on-track').length;
   const atRiskKPIs = kpis.filter(k => k.status === 'at-risk').length;
   const totalRevenue = revenueData.reduce((sum, r) => sum + r.revenue, 0);
   const revenueGrowth = ((revenueData[revenueData.length - 1].revenue - revenueData[0].revenue) / revenueData[0].revenue) * 100;
-  
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     // Simulate API call
@@ -223,7 +223,7 @@ export default function ExecutiveDashboard({
       setIsRefreshing(false);
     }, 1000);
   };
-  
+
   const handleExportDashboard = () => {
     const data = {
       kpis,
@@ -233,7 +233,7 @@ export default function ExecutiveDashboard({
       riskData,
       timestamp: new Date().toISOString(),
     };
-    
+
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
@@ -242,7 +242,7 @@ export default function ExecutiveDashboard({
     a.download = `executive-dashboard-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
   };
-  
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'on-track':
@@ -259,7 +259,7 @@ export default function ExecutiveDashboard({
         return null;
     }
   };
-  
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'on-track':
@@ -274,7 +274,7 @@ export default function ExecutiveDashboard({
         return 'bg-gray-100 text-gray-800';
     }
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -297,19 +297,19 @@ export default function ExecutiveDashboard({
               <SelectItem value="year">This Year</SelectItem>
             </SelectContent>
           </Select>
-          
+
           <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          
+
           <Button variant="outline" onClick={handleExportDashboard}>
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
         </div>
       </div>
-      
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-4 w-full max-w-2xl">
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -317,7 +317,7 @@ export default function ExecutiveDashboard({
           <TabsTrigger value="initiatives">Initiatives</TabsTrigger>
           <TabsTrigger value="risks">Risks & Opportunities</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="overview" className="space-y-6">
           {/* Executive Summary */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -340,7 +340,7 @@ export default function ExecutiveDashboard({
                 </ResponsiveContainer>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Customer Segments</CardTitle>
@@ -354,7 +354,7 @@ export default function ExecutiveDashboard({
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="value"
@@ -370,7 +370,7 @@ export default function ExecutiveDashboard({
               </CardContent>
             </Card>
           </div>
-          
+
           {/* KPI Dashboard */}
           <Card>
             <CardHeader>
@@ -400,7 +400,7 @@ export default function ExecutiveDashboard({
                         </div>
                         <Target className="h-5 w-5 text-muted-foreground" />
                       </div>
-                      
+
                       <div className="mt-4">
                         <div className="flex items-baseline gap-2">
                           <span className="text-2xl font-bold">
@@ -410,7 +410,7 @@ export default function ExecutiveDashboard({
                             Target: {kpi.unit === '$' ? formatCurrency(kpi.target) : kpi.unit === '%' ? `${kpi.target}%` : formatNumber(kpi.target)}
                           </span>
                         </div>
-                        
+
                         <div className="mt-2">
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span>Progress</span>
@@ -426,7 +426,7 @@ export default function ExecutiveDashboard({
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="financials" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
@@ -451,7 +451,7 @@ export default function ExecutiveDashboard({
                       <p className="text-sm text-green-500">68% margin</p>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm">Operating Expenses</span>
@@ -469,7 +469,7 @@ export default function ExecutiveDashboard({
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Efficiency Metrics</CardTitle>
@@ -487,7 +487,7 @@ export default function ExecutiveDashboard({
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{metric.name}</span>
                         <Badge variant={
-                          metric.status === 'excellent' ? 'default' : 
+                          metric.status === 'excellent' ? 'default' :
                           metric.status === 'good' ? 'secondary' : 'destructive'
                         }>
                           {metric.status}
@@ -501,13 +501,9 @@ export default function ExecutiveDashboard({
                           Target: {metric.unit === '$' ? formatCurrency(metric.target) : metric.target}{metric.unit || ''}
                         </span>
                       </div>
-                      <Progress 
+                      <Progress
                         value={(metric.value / metric.target) * 100} 
                         className="h-2"
-                        indicatorClassName={
-                          metric.status === 'excellent' ? 'bg-green-500' :
-                          metric.status === 'good' ? 'bg-blue-500' : 'bg-red-500'
-                        }
                       />
                     </div>
                   ))}
@@ -516,7 +512,7 @@ export default function ExecutiveDashboard({
             </Card>
           </div>
         </TabsContent>
-        
+
         <TabsContent value="initiatives" className="space-y-6">
           <Card>
             <CardHeader>
@@ -540,7 +536,7 @@ export default function ExecutiveDashboard({
                           <span className="ml-1">{initiative.status.replace('-', ' ')}</span>
                         </Badge>
                       </div>
-                      
+
                       <div className="space-y-3">
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-4">
@@ -555,9 +551,9 @@ export default function ExecutiveDashboard({
                           </div>
                           <span className="font-medium">{initiative.progress}% complete</span>
                         </div>
-                        
+
                         <Progress value={initiative.progress} className="h-2" />
-                        
+
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>Started: {formatDate('2024-01-01')}</span>
                           <span>{Math.ceil((new Date(initiative.dueDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days remaining</span>
@@ -570,7 +566,7 @@ export default function ExecutiveDashboard({
             </CardContent>
           </Card>
         </TabsContent>
-        
+
         <TabsContent value="risks" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
@@ -598,20 +594,16 @@ export default function ExecutiveDashboard({
                           ) : null}
                         </div>
                       </div>
-                      <Progress 
-                        value={risk.score} 
+                      <Progress
+                        value={risk.score}
                         className="h-2"
-                        indicatorClassName={
-                          risk.score > 60 ? 'bg-red-500' :
-                          risk.score > 40 ? 'bg-yellow-500' : 'bg-green-500'
-                        }
                       />
                     </div>
                   ))}
                 </div>
               </CardContent>
             </Card>
-            
+
             <Card>
               <CardHeader>
                 <CardTitle>Opportunities</CardTitle>
@@ -647,7 +639,7 @@ export default function ExecutiveDashboard({
               </CardContent>
             </Card>
           </div>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Risk Mitigation Actions</CardTitle>

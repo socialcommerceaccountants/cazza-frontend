@@ -189,7 +189,7 @@ export function OnboardingWizard() {
 
             <div className="space-y-2">
               <Label htmlFor="industry">Industry *</Label>
-              <Select value={industry} onValueChange={setIndustry}>
+              <Select value={industry} onValueChange={(value) => setIndustry(value || "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select your industry" />
                 </SelectTrigger>
@@ -205,7 +205,7 @@ export function OnboardingWizard() {
 
             <div className="space-y-2">
               <Label htmlFor="businessSize">Company Size *</Label>
-              <Select value={businessSize} onValueChange={setBusinessSize}>
+              <Select value={businessSize} onValueChange={(value) => setBusinessSize(value || "")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select company size" />
                 </SelectTrigger>

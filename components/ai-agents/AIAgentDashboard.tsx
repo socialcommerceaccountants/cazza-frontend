@@ -13,7 +13,16 @@ import ConversationHistory from "./ConversationHistory"
 import DeploymentManager from "./DeploymentManager"
 
 // Mock data for demonstration
-const mockAgents = [
+const mockAgents: Array<{
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  status: "active" | "training" | "inactive";
+  lastTrained: string;
+  trainingSessions: number;
+  accuracy: number;
+}> = [
   {
     id: "cazza_sales_assistant",
     name: "Cazza Sales Assistant",

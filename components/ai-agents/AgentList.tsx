@@ -118,7 +118,7 @@ export default function AgentList({ agents, onTrainAgent, onCreateAgent }: Agent
                       Train
                     </Button>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger>
                         <Button size="sm" variant="ghost">
                           <MoreVertical className="h-4 w-4" />
                         </Button>

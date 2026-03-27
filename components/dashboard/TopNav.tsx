@@ -91,7 +91,7 @@ export function TopNav({ onToggleSidebar, sidebarCollapsed }: TopNavProps) {
         <div className="flex items-center gap-2 ml-4">
           {/* Notifications */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger>
               <Button variant="ghost" size="icon" className="relative">
                 <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
@@ -146,7 +146,7 @@ export function TopNav({ onToggleSidebar, sidebarCollapsed }: TopNavProps) {
 
           {/* User menu */}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger>
               <Button variant="ghost" className="flex items-center gap-2">
                 <Avatar className="h-8 w-8">
                   <AvatarImage src="/avatar.jpg" />

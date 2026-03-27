@@ -110,7 +110,7 @@ export default function PerformanceMonitor() {
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Time Range</label>
-                <Select value={timeRange} onValueChange={setTimeRange}>
+                <Select value={timeRange} onValueChange={(value) => setTimeRange(value || "")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select time range" />
                   </SelectTrigger>
@@ -124,7 +124,7 @@ export default function PerformanceMonitor() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Agent</label>
-                <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                <Select value={selectedAgent} onValueChange={(value) => setSelectedAgent(value || "")}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select agent" />
                   </SelectTrigger>

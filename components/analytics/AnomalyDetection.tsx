@@ -25,7 +25,6 @@ import {
   RefreshCw,
   Mail,
   MessageSquare,
-  Bell,
   Zap,
   TrendingUp,
   TrendingDown,
@@ -698,7 +697,7 @@ export default function AnomalyDetection({ onAlert, onRuleChange }: AnomalyDetec
                       <Label htmlFor="metric">Metric</Label>
                       <Select
                         value={newRule.metric}
-                        onValueChange={(value) => setNewRule({ ...newRule, metric: value })}
+                        onValueChange={(value) => setNewRule({ ...newRule, metric: value || "" })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select metric" />
@@ -717,7 +716,7 @@ export default function AnomalyDetection({ onAlert, onRuleChange }: AnomalyDetec
                       <Label htmlFor="condition">Condition</Label>
                       <Select
                         value={newRule.condition}
-                        onValueChange={(value) => setNewRule({ ...newRule, condition: value })}
+                        onValueChange={(value) => setNewRule({ ...newRule, condition: value || "" })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select condition" />
@@ -747,7 +746,7 @@ export default function AnomalyDetection({ onAlert, onRuleChange }: AnomalyDetec
                       <Label htmlFor="severity">Severity</Label>
                       <Select
                         value={newRule.severity}
-                        onValueChange={(value) => setNewRule({ ...newRule, severity: value })}
+                        onValueChange={(value) => setNewRule({ ...newRule, severity: value || "" })}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select severity" />

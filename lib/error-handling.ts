@@ -219,15 +219,15 @@ export function useQueryErrorHandler() {
 
 // Mutation error handler
 export function useMutationErrorHandler() {
-  const { handleError } = useErrorHandler();
+  const { handleError, handleSuccess } = useErrorHandler();
 
   const onError = useCallback((error: unknown) => {
     handleError(error, { showToast: true });
   }, [handleError]);
 
   const onSuccess = useCallback((message: string) => {
-    handleError.handleSuccess(message);
-  }, [handleError]);
+    handleSuccess(message);
+  }, [handleSuccess]);
 
   return { onError, onSuccess };
 }

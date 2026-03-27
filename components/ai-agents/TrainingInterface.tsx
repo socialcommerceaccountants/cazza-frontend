@@ -75,7 +75,7 @@ export default function TrainingInterface() {
           {/* Agent Selection */}
           <div className="space-y-2">
             <Label htmlFor="agent">Select Agent</Label>
-            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+            <Select value={selectedAgent} onValueChange={(value) => setSelectedAgent(value || "")}>
               <SelectTrigger>
                 <SelectValue placeholder="Choose an agent to train" />
               </SelectTrigger>
@@ -127,7 +127,7 @@ export default function TrainingInterface() {
                     accept=".txt,.pdf,.doc,.docx,.csv,.json"
                   />
                   <Label htmlFor="training-file">
-                    <Button asChild variant="outline">
+                    <Button variant="outline">
                       <span>Choose Files</span>
                     </Button>
                   </Label>

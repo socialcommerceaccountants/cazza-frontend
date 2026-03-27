@@ -168,7 +168,7 @@ export default function ConversationHistory() {
               />
             </div>
             <div className="flex gap-2">
-              <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+              <Select value={selectedAgent} onValueChange={(value) => setSelectedAgent(value || "")}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Select agent" />
                 </SelectTrigger>
@@ -181,7 +181,7 @@ export default function ConversationHistory() {
                 </SelectContent>
               </Select>
               
-              <Select value={selectedSatisfaction} onValueChange={setSelectedSatisfaction}>
+              <Select value={selectedSatisfaction} onValueChange={(value) => setSelectedSatisfaction(value || "")}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Satisfaction" />
                 </SelectTrigger>
@@ -194,7 +194,7 @@ export default function ConversationHistory() {
               </Select>
               
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger>
                   <Button variant="outline" className="gap-2">
                     <Filter className="h-4 w-4" />
                     More Filters

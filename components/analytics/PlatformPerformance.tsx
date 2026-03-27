@@ -154,7 +154,16 @@ export default function PlatformPerformance() {
   const sortedMetrics = [...metrics].sort((a, b) => {
     const aVal = a[sortBy];
     const bVal = b[sortBy];
-    return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
+    
+    // Handle string comparison for platform name
+    if (typeof aVal === 'string' && typeof bVal === 'string') {
+      return sortOrder === "desc" ? bVal.localeCompare(aVal) : aVal.localeCompare(bVal);
+    }
+    
+    // Handle number comparison for numeric fields
+    const aNum = typeof aVal === 'number' ? aVal : 0;
+    const bNum = typeof bVal === 'number' ? bVal : 0;
+    return sortOrder === "desc" ? bNum - aNum : aNum - bNum;
   });
 
   const totalRevenue = metrics.reduce((sum, m) => sum + m.revenue, 0);
@@ -298,7 +307,11 @@ export default function PlatformPerformance() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          if (value === "overview" || value === "revenue" || value === "users" || value === "conversion") {
+            setActiveTab(value);
+          }
+        }}>
           <TabsList className="grid w-full max-w-lg grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="revenue">Revenue</TabsTrigger>
@@ -376,7 +389,7 @@ export default function PlatformPerformance() {
                             return (
                               <div className="bg-background border rounded-lg shadow-lg p-4">
                                 <p className="font-medium text-foreground">
-                                  {new Date(label).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                                  {label ? new Date(label).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Unknown Date"}
                                 </p>
                                 {payload.map((entry: any, index: number) => (
                                   <p key={index} className="text-sm" style={{ color: entry.color }}>

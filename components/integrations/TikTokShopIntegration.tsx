@@ -18,6 +18,7 @@ import {
   Video,
   ShoppingBag,
   Users,
+  DollarSign,
   Globe,
   Smartphone,
   BarChart,

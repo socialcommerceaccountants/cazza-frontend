@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Rocket, GitBranch, Globe, Server, Lock, Unlock, Play, Pause, RefreshCw, Download, Upload, Settings } from "lucide-react"
+import { Rocket, GitBranch, Globe, Server, Lock, Unlock, Play, Pause, RefreshCw, Download, Upload, Settings, Copy } from "lucide-react"
 
 interface Deployment {
   id: string
@@ -207,7 +207,7 @@ export default function DeploymentManager() {
               <Label htmlFor="deploy-agent">Select Agent</Label>
               <Select 
                 value={newDeployment.agent} 
-                onValueChange={(value) => setNewDeployment({...newDeployment, agent: value})}
+                onValueChange={(value) => setNewDeployment({...newDeployment, agent: value || ""})}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Choose an agent" />
@@ -226,7 +226,7 @@ export default function DeploymentManager() {
               <Label htmlFor="deploy-version">Version</Label>
               <Select 
                 value={newDeployment.version} 
-                onValueChange={(value) => setNewDeployment({...newDeployment, version: value})}
+                onValueChange={(value) => setNewDeployment({...newDeployment, version: value || ""})}
                 disabled={!newDeployment.agent}
               >
                 <SelectTrigger>

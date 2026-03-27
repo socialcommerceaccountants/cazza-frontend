@@ -374,7 +374,11 @@ export default function RealTimeMetrics() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          if (value === "performance" || value === "metrics" || value === "alerts") {
+            setActiveTab(value);
+          }
+        }}>
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="metrics">Live Metrics</TabsTrigger>
             <TabsTrigger value="alerts">Alerts</TabsTrigger>

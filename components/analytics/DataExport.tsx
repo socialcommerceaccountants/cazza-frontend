@@ -553,7 +553,7 @@ export default function DataExport({ onExport, onSchedule }: DataExportProps) {
                 <div className="space-y-4">
                   <div>
                     <Label htmlFor="frequency">Frequency</Label>
-                    <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
+                    <Select value={scheduleFrequency} onValueChange={(value) => setScheduleFrequency(value || "")}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select frequency" />
                       </SelectTrigger>

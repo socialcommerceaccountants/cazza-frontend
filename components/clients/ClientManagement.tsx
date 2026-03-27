@@ -314,7 +314,7 @@ export function ClientManagement() {
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value || "")}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -327,7 +327,7 @@ export function ClientManagement() {
                 </Select>
               </div>
 
-              <Select value={subscriptionFilter} onValueChange={setSubscriptionFilter}>
+              <Select value={subscriptionFilter} onValueChange={(value) => setSubscriptionFilter(value || "")}>
                 <SelectTrigger className="w-[160px]">
                   <SelectValue placeholder="Subscription" />
                 </SelectTrigger>
@@ -440,7 +440,7 @@ export function ClientManagement() {
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                            <DropdownMenuTrigger>
                               <Button variant="ghost" size="icon">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>

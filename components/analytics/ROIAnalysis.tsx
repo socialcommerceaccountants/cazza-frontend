@@ -251,7 +251,11 @@ export default function ROIAnalysis() {
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          if (value === "overview" || value === "breakdown" || value === "radar") {
+            setActiveTab(value);
+          }
+        }}>
           <TabsList className="grid w-full max-w-md grid-cols-3">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <PieChartIcon className="h-4 w-4" />
@@ -278,7 +282,7 @@ export default function ROIAnalysis() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ category, percent }) => `${category}: ${(percent * 100).toFixed(0)}%`}
+                      label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                       outerRadius={120}
                       fill="#8884d8"
                       dataKey="investment"
@@ -322,13 +326,6 @@ export default function ROIAnalysis() {
                           value={Math.min(item.roi, 300)}
                           max={300}
                           className="h-2"
-                          indicatorClassName={
-                            item.roi >= 200
-                              ? "bg-green-500"
-                              : item.roi >= 100
-                              ? "bg-yellow-500"
-                              : "bg-red-500"
-                          }
                         />
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Investment: {formatCurrency(item.investment)}</span>

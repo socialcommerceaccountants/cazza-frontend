@@ -233,17 +233,27 @@ const mockApi = {
   },
 
   // Update CAC channel
-  updateCACChannel: async (channelData: any) => {
+  updateCACChannel: async (channelData: any): Promise<CACChannel> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     console.log('Updating channel:', channelData);
-    return { success: true, data: channelData };
+    // Return as CACChannel type
+    return {
+      id: channelData.id || `channel-${Date.now()}`,
+      channel: channelData.channel || 'Unknown',
+      spend: channelData.spend || 0,
+      customers: channelData.customers || 0,
+      cac: channelData.customers ? channelData.spend / channelData.customers : 0,
+      ltv: channelData.ltv || 0,
+      roi: channelData.roi || 0
+    };
   },
 
   // Delete CAC channel
-  deleteCACChannel: async (channelId: string) => {
+  deleteCACChannel: async (channelId: string): Promise<void> => {
     await new Promise(resolve => setTimeout(resolve, 500));
     console.log('Deleting channel:', channelId);
-    return { success: true, channelId };
+    // Return void as expected
+    return;
   },
 };
 

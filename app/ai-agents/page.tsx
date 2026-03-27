@@ -1,5 +1,5 @@
 import { Metadata } from "next"
-import DashboardLayout from "@/components/dashboard/DashboardLayout"
+import { DashboardLayout } from "@/components/dashboard/DashboardLayout"
 import AIAgentDashboard from "@/components/ai-agents/AIAgentDashboard"
 
 export const metadata: Metadata = {

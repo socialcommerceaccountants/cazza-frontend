@@ -76,19 +76,19 @@ class IntegrationAPI {
    * Get integration status
    */
   async getStatus(integrationType?: string): Promise<IntegrationStatusResponse> {
-    const params = integrationType ? { integration_type: integrationType } : undefined;
-    const response = await apiClient.get('/integrations/status', { params });
-    return response.data;
+    const url = integrationType 
+      ? `/integrations/status?integration_type=${encodeURIComponent(integrationType)}`
+      : '/integrations/status';
+    return await apiClient.get<IntegrationStatusResponse>(url);
   }
 
   /**
    * Sync integration data
    */
   async sync(integrationType: string, fullSync: boolean = false): Promise<SyncResponse> {
-    const response = await apiClient.post(`/integrations/${integrationType}/sync`, {
+    return await apiClient.post<SyncResponse>(`/integrations/${integrationType}/sync`, {
       full_sync: fullSync,
     });
-    return response.data;
   }
 
   /**
@@ -99,21 +99,19 @@ class IntegrationAPI {
     limit: number = 50,
     offset: number = 0
   ): Promise<{ success: boolean; data: SyncHistory }> {
-    const params: any = { limit, offset };
+    let url = `/integrations/sync-history?limit=${limit}&offset=${offset}`;
     if (integrationType) {
-      params.integration_type = integrationType;
+      url += `&integration_type=${encodeURIComponent(integrationType)}`;
     }
     
-    const response = await apiClient.get('/integrations/sync-history', { params });
-    return response.data;
+    return await apiClient.get<{ success: boolean; data: SyncHistory }>(url);
   }
 
   /**
    * Retry a failed sync
    */
   async retrySync(syncId: number): Promise<SyncResponse> {
-    const response = await apiClient.post(`/integrations/sync/${syncId}/retry`);
-    return response.data;
+    return await apiClient.post<any>(`/integrations/sync/${syncId}/retry`);
   }
 
   /**
@@ -124,24 +122,21 @@ class IntegrationAPI {
    * Get Xero authorization URL
    */
   async getXeroAuthUrl(): Promise<XeroAuthResponse> {
-    const response = await apiClient.get('/integrations/xero/auth-url');
-    return response.data;
+    return await apiClient.get<any>('/integrations/xero/auth-url');
   }
 
   /**
    * Get Xero tenants
    */
   async getXeroTenants(): Promise<XeroTenantsResponse> {
-    const response = await apiClient.get('/integrations/xero/tenants');
-    return response.data;
+    return await apiClient.get<any>('/integrations/xero/tenants');
   }
 
   /**
    * Disconnect Xero tenant
    */
   async disconnectXeroTenant(tenantId: string): Promise<{ success: boolean; message: string }> {
-    const response = await apiClient.post(`/integrations/xero/tenants/${tenantId}/disconnect`);
-    return response.data;
+    return await apiClient.post<any>(`/integrations/xero/tenants/${tenantId}/disconnect`);
   }
 
   /**
@@ -152,8 +147,7 @@ class IntegrationAPI {
    * Get Shopify authorization URL
    */
   async getShopifyAuthUrl(): Promise<XeroAuthResponse> {
-    const response = await apiClient.get('/integrations/shopify/auth-url');
-    return response.data;
+    return await apiClient.get<any>('/integrations/shopify/auth-url');
   }
 
   /**
@@ -164,16 +158,14 @@ class IntegrationAPI {
    * Get TikTok Shop authorization URL
    */
   async getTikTokAuthUrl(): Promise<XeroAuthResponse> {
-    const response = await apiClient.get('/integrations/tiktok/auth-url');
-    return response.data;
+    return await apiClient.get<any>('/integrations/tiktok/auth-url');
   }
 
   /**
    * Health check
    */
   async healthCheck(): Promise<{ status: string; integrations: Record<string, string>; timestamp: string }> {
-    const response = await apiClient.get('/integrations/health');
-    return response.data;
+    return await apiClient.get<any>('/integrations/health');
   }
 }
 

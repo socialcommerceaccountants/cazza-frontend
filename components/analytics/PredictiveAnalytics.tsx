@@ -380,7 +380,7 @@ export default function PredictiveAnalytics({
               <div className="flex flex-wrap items-center gap-4 p-4 bg-muted rounded-lg">
                 <div className="flex items-center gap-2">
                   <Label htmlFor="model">Model:</Label>
-                  <Select value={activeModel} onValueChange={setActiveModel}>
+                  <Select value={activeModel} onValueChange={(value) => setActiveModel(value || "")}>
                     <SelectTrigger className="w-[180px]">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
@@ -402,7 +402,11 @@ export default function PredictiveAnalytics({
                     max={90}
                     step={1}
                     value={[forecastDays]}
-                    onValueChange={([value]) => setForecastDays(value)}
+                    onValueChange={(values) => {
+                      if (Array.isArray(values) && values.length > 0) {
+                        setForecastDays(values[0]);
+                      }
+                    }}
                     className="w-[200px]"
                   />
                 </div>
@@ -415,7 +419,11 @@ export default function PredictiveAnalytics({
                     max={0.95}
                     step={0.05}
                     value={[confidenceLevel]}
-                    onValueChange={([value]) => setConfidenceLevel(value)}
+                    onValueChange={(values) => {
+                      if (Array.isArray(values) && values.length > 0) {
+                        setConfidenceLevel(values[0]);
+                      }
+                    }}
                     className="w-[200px]"
                   />
                 </div>

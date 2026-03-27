@@ -203,7 +203,11 @@ export default function CACCalculator({ initialData }: CACCalculatorProps) {
               </div>
               <Slider
                 value={[targetCAC]}
-                onValueChange={([value]) => setTargetCAC(value)}
+                onValueChange={(values) => {
+                  if (Array.isArray(values) && values.length > 0) {
+                    setTargetCAC(values[0]);
+                  }
+                }}
                 min={10}
                 max={100}
                 step={5}

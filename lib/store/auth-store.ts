@@ -181,9 +181,7 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         token: state.token,
         isAuthenticated: state.isAuthenticated,
-      }),
-      // Only persist to localStorage on client side
-      storage: typeof window !== 'undefined' ? localStorage : undefined,
+      } as AuthState),
     }
   )
 );

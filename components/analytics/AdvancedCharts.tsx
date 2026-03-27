@@ -128,11 +128,21 @@ export default function AdvancedCharts({
     const existing = acc.find(a => a.date === item.date);
     if (existing) {
       existing.value += item.value;
+      if (item.forecast) {
+        existing.forecast = (existing.forecast || 0) + item.forecast;
+      }
     } else {
-      acc.push({ date: item.date, value: item.value });
+      const newItem: { date: string; value: number; forecast?: number } = { 
+        date: item.date, 
+        value: item.value 
+      };
+      if (item.forecast) {
+        newItem.forecast = item.forecast;
+      }
+      acc.push(newItem);
     }
     return acc;
-  }, [] as { date: string; value: number }[]);
+  }, [] as { date: string; value: number; forecast?: number }[]);
   
   const handleExport = (format: 'csv' | 'png' | 'json') => {
     switch (format) {
@@ -274,7 +284,7 @@ export default function AdvancedCharts({
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
                 outerRadius={150}
                 fill="#8884d8"
                 dataKey="value"
@@ -360,7 +370,7 @@ export default function AdvancedCharts({
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select value={selectedCategory} onValueChange={(value) => setSelectedCategory(value || "")}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>

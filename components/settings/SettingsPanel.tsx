@@ -248,7 +248,7 @@ export function SettingsPanel() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
-                  <Select value={profile.timezone} onValueChange={(value) => setProfile({ ...profile, timezone: value })}>
+                  <Select value={profile.timezone} onValueChange={(value) => setProfile({ ...profile, timezone: value || "" })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -265,7 +265,7 @@ export function SettingsPanel() {
                 
                 <div className="space-y-2">
                   <Label htmlFor="language">Language</Label>
-                  <Select value={profile.language} onValueChange={(value) => setProfile({ ...profile, language: value })}>
+                  <Select value={profile.language} onValueChange={(value) => setProfile({ ...profile, language: value || "" })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -324,6 +324,7 @@ export function SettingsPanel() {
                 <Button variant="destructive">
                   Delete Account
                 </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -490,7 +491,7 @@ export function SettingsPanel() {
                   <Label>Interface Density</Label>
                   <Select
                     value={appearance.density}
-                    onValueChange={(value) => setAppearance({ ...appearance, density: value })}
+                    onValueChange={(value) => setAppearance({ ...appearance, density: value || "" })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -507,7 +508,7 @@ export function SettingsPanel() {
                   <Label>Font Size</Label>
                   <Select
                     value={appearance.fontSize}
-                    onValueChange={(value) => setAppearance({ ...appearance, fontSize: value })}
+                    onValueChange={(value) => setAppearance({ ...appearance, fontSize: value || "" })}
                   >
                     <SelectTrigger>
                       <SelectValue />
