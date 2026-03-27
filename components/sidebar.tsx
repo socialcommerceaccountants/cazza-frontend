@@ -22,10 +22,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserProfile } from "@/components/auth/user-profile";
 
 const navItems = [
   { icon: Home, label: "Dashboard", active: true },
@@ -163,29 +163,28 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4">
-        <div className={cn("flex items-center", collapsed ? "justify-center" : "justify-between")}>
+      <div className="border-t">
+        <UserProfile />
+        <div className={cn("flex items-center p-4", collapsed ? "justify-center" : "justify-between")}>
           {!collapsed && (
-            <div className="flex items-center gap-3">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src="/avatar.jpg" />
-                <AvatarFallback>SA</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-medium">Sam</p>
-                <p className="text-xs text-muted-foreground">Admin</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Bell className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <HelpCircle className="h-4 w-4" />
+              </Button>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <HelpCircle className="h-4 w-4" />
-            </Button>
-          </div>
+          {collapsed && (
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Bell className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </aside>
