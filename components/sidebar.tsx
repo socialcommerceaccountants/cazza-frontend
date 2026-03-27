@@ -19,6 +19,7 @@ import {
   Globe,
   Mail,
   Calendar,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ const navItems = [
   { icon: Home, label: "Dashboard", active: true },
   { icon: BarChart3, label: "Analytics" },
   { icon: MessageSquare, label: "Chat", badge: "New" },
+  { icon: Brain, label: "AI Agents", badge: "New" },
   { icon: FileText, label: "Documents" },
   { icon: CreditCard, label: "Finance" },
   { icon: Users, label: "Team" },
