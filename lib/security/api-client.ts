@@ -323,11 +323,11 @@ export const useSecureQuery = <T>(
     enabled,
     staleTime,
     gcTime,
-    retry: retry ?? (failureCount, error) => {
+    retry: retry ?? ((failureCount: number, error: any) => {
       // Don't retry on authentication/authorization errors
       if (error?.status === 401 || error?.status === 403) return false;
       return failureCount < 3;
-    },
+    }),
   });
 };
 
