@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, FileText, Database, Globe, Edit, Trash2, Filter } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Search, Plus, FileText, Database, Globe, Edit, Trash2, Filter, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,131 +18,95 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/components/ui/use-toast"
+import context7API, { KnowledgeItem } from "@/lib/context7-api"
+import { useAuthStore } from "@/lib/store/auth-store"
 
-interface KnowledgeItem {
-  id: string
-  title: string
-  content: string
-  type: "document" | "database" | "web" | "manual"
-  tags: string[]
-  agent: string
-  lastUpdated: string
-  size: string
-  status: "active" | "pending" | "archived"
-}
+type KnowledgeType = KnowledgeItem["type"]
 
 export default function KnowledgeBaseManager() {
+  const { token } = useAuthStore()
+  const { toast } = useToast()
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedType, setSelectedType] = useState<string>("all")
   const [isAddingItem, setIsAddingItem] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([])
   const [newItem, setNewItem] = useState({
     title: "",
     content: "",
-    type: "document" as const,
+    type: "document" as KnowledgeType,
     tags: [] as string[],
     agent: "",
   })
 
-  const knowledgeItems: KnowledgeItem[] = [
-    {
-      id: "1",
-      title: "Sales Conversation Patterns",
-      content: "Common sales conversation patterns and responses...",
-      type: "document",
-      tags: ["sales", "conversation", "patterns"],
-      agent: "Cazza Sales Assistant",
-      lastUpdated: "2024-03-27",
-      size: "2.4 MB",
-      status: "active",
-    },
-    {
-      id: "2",
-      title: "Financial Regulations Database",
-      content: "Updated financial regulations and compliance guidelines...",
-      type: "database",
-      tags: ["finance", "regulations", "compliance"],
-      agent: "Cazza Financial Advisor",
-      lastUpdated: "2024-03-26",
-      size: "15.7 MB",
-      status: "active",
-    },
-    {
-      id: "3",
-      title: "Marketing Campaign Examples",
-      content: "Successful marketing campaign examples and analysis...",
-      type: "web",
-      tags: ["marketing", "campaigns", "examples"],
-      agent: "Cazza Marketing Analyst",
-      lastUpdated: "2024-03-25",
-      size: "5.2 MB",
-      status: "active",
-    },
-    {
-      id: "4",
-      title: "Customer Support Guidelines",
-      content: "Internal customer support guidelines and procedures...",
-      type: "manual",
-      tags: ["support", "guidelines", "procedures"],
-      agent: "All Agents",
-      lastUpdated: "2024-03-24",
-      size: "1.8 MB",
-      status: "active",
-    },
-    {
-      id: "5",
-      title: "Industry News Feed",
-      content: "Latest industry news and trends for context...",
-      type: "web",
-      tags: ["news", "trends", "industry"],
-      agent: "All Agents",
-      lastUpdated: "2024-03-23",
-      size: "3.5 MB",
-      status: "pending",
-    },
-  ]
+  const loadKnowledge = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      if (token) context7API.setToken(token)
+      const items = await context7API.listKnowledgeItems()
+      setKnowledgeItems(items)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load knowledge base"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsLoading(false)
+    }
+  }, [token, toast])
 
-  const filteredItems = knowledgeItems.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         item.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+  useEffect(() => {
+    loadKnowledge()
+  }, [loadKnowledge])
+
+  const filteredItems = knowledgeItems.filter((item) => {
+    const matchesSearch =
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
     const matchesType = selectedType === "all" || item.type === selectedType
     return matchesSearch && matchesType
   })
 
-  const handleAddItem = () => {
-    if (!newItem.title || !newItem.content) {
-      alert("Please fill in all required fields")
+  const handleAddItem = async () => {
+    if (!newItem.title.trim() || !newItem.content.trim()) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in the title and content.",
+        variant: "destructive",
+      })
       return
     }
 
-    // In a real implementation, this would call an API
-    console.log("Adding new knowledge item:", newItem)
-    
-    // Reset form
-    setNewItem({
-      title: "",
-      content: "",
-      type: "document",
-      tags: [],
-      agent: "",
-    })
-    setIsAddingItem(false)
-    
-    alert("Knowledge item added successfully!")
+    try {
+      setIsSaving(true)
+      if (token) context7API.setToken(token)
+      const created = await context7API.addKnowledgeItem({
+        title: newItem.title.trim(),
+        content: newItem.content.trim(),
+        type: newItem.type,
+        tags: newItem.tags,
+        agent_id: newItem.agent || undefined,
+      })
+      setKnowledgeItems((prev) => [created, ...prev])
+      setNewItem({ title: "", content: "", type: "document", tags: [], agent: "" })
+      setIsAddingItem(false)
+      toast({ title: "Knowledge item added", description: `"${created.title}" has been added.` })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to add knowledge item"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const getTypeIcon = (type: KnowledgeItem["type"]) => {
+  const getTypeIcon = (type: KnowledgeType) => {
     switch (type) {
-      case "document":
-        return <FileText className="h-4 w-4" />
-      case "database":
-        return <Database className="h-4 w-4" />
-      case "web":
-        return <Globe className="h-4 w-4" />
-      case "manual":
-        return <FileText className="h-4 w-4" />
-      default:
-        return <FileText className="h-4 w-4" />
+      case "document": return <FileText className="h-4 w-4" />
+      case "database": return <Database className="h-4 w-4" />
+      case "web": return <Globe className="h-4 w-4" />
+      case "manual": return <FileText className="h-4 w-4" />
     }
   }
 
@@ -153,8 +118,6 @@ export default function KnowledgeBaseManager() {
         return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Pending</Badge>
       case "archived":
         return <Badge variant="outline">Archived</Badge>
-      default:
-        return <Badge variant="outline">Unknown</Badge>
     }
   }
 
@@ -175,7 +138,7 @@ export default function KnowledgeBaseManager() {
             </div>
             <div className="flex gap-2">
               <DropdownMenu>
-                <DropdownMenuTrigger>
+                <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-2">
                     <Filter className="h-4 w-4" />
                     Filter by Type
@@ -183,25 +146,19 @@ export default function KnowledgeBaseManager() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuLabel>Knowledge Type</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setSelectedType("all")}>
-                    All Types
-                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSelectedType("all")}>All Types</DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => setSelectedType("document")}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Documents
+                    <FileText className="mr-2 h-4 w-4" /> Documents
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSelectedType("database")}>
-                    <Database className="mr-2 h-4 w-4" />
-                    Databases
+                    <Database className="mr-2 h-4 w-4" /> Databases
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSelectedType("web")}>
-                    <Globe className="mr-2 h-4 w-4" />
-                    Web Content
+                    <Globe className="mr-2 h-4 w-4" /> Web Content
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setSelectedType("manual")}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    Manual Entries
+                    <FileText className="mr-2 h-4 w-4" /> Manual Entries
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -211,15 +168,12 @@ export default function KnowledgeBaseManager() {
               </Button>
             </div>
           </div>
-          
+
           {selectedType !== "all" && (
             <div className="mt-4 flex items-center gap-2">
               <Badge variant="outline" className="gap-1">
                 {selectedType.charAt(0).toUpperCase() + selectedType.slice(1)}
-                <button 
-                  onClick={() => setSelectedType("all")}
-                  className="ml-1 hover:text-destructive"
-                >
+                <button onClick={() => setSelectedType("all")} className="ml-1 hover:text-destructive" aria-label="Clear filter">
                   ×
                 </button>
               </Badge>
@@ -236,77 +190,92 @@ export default function KnowledgeBaseManager() {
         <Card>
           <CardHeader>
             <CardTitle>Add New Knowledge</CardTitle>
-            <CardDescription>
-              Add new information to your AI agents' knowledge base
-            </CardDescription>
+            <CardDescription>Add new information to your AI agents&apos; knowledge base</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Title *</Label>
+                <Label htmlFor="kb-title">Title *</Label>
                 <Input
-                  id="title"
+                  id="kb-title"
                   placeholder="Enter knowledge title"
                   value={newItem.title}
-                  onChange={(e) => setNewItem({...newItem, title: e.target.value})}
+                  onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="type">Knowledge Type *</Label>
-                <select
-                  id="type"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                <Label htmlFor="kb-type">Knowledge Type *</Label>
+                <Select
                   value={newItem.type}
-                  onChange={(e) => setNewItem({...newItem, type: e.target.value as any})}
+                  onValueChange={(value: KnowledgeType) =>
+                    setNewItem({ ...newItem, type: value })
+                  }
                 >
-                  <option value="document">Document</option>
-                  <option value="database">Database</option>
-                  <option value="web">Web Content</option>
-                  <option value="manual">Manual Entry</option>
-                </select>
+                  <SelectTrigger id="kb-type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="document">Document</SelectItem>
+                    <SelectItem value="database">Database</SelectItem>
+                    <SelectItem value="web">Web Content</SelectItem>
+                    <SelectItem value="manual">Manual Entry</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="content">Content *</Label>
+              <Label htmlFor="kb-content">Content *</Label>
               <Textarea
-                id="content"
+                id="kb-content"
                 placeholder="Enter knowledge content..."
                 rows={6}
                 value={newItem.content}
-                onChange={(e) => setNewItem({...newItem, content: e.target.value})}
+                onChange={(e) => setNewItem({ ...newItem, content: e.target.value })}
               />
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="tags">Tags (comma-separated)</Label>
+              <Label htmlFor="kb-tags">Tags (comma-separated)</Label>
               <Input
-                id="tags"
+                id="kb-tags"
                 placeholder="sales, marketing, finance"
                 value={newItem.tags.join(", ")}
-                onChange={(e) => setNewItem({
-                  ...newItem, 
-                  tags: e.target.value.split(",").map(tag => tag.trim()).filter(tag => tag)
-                })}
+                onChange={(e) =>
+                  setNewItem({
+                    ...newItem,
+                    tags: e.target.value
+                      .split(",")
+                      .map((tag) => tag.trim())
+                      .filter((tag) => tag),
+                  })
+                }
               />
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="agent">Associated Agent</Label>
+              <Label htmlFor="kb-agent">Associated Agent (optional)</Label>
               <Input
-                id="agent"
-                placeholder="Cazza Sales Assistant (optional)"
+                id="kb-agent"
+                placeholder="e.g. cazza_financial_advisor"
                 value={newItem.agent}
-                onChange={(e) => setNewItem({...newItem, agent: e.target.value})}
+                onChange={(e) => setNewItem({ ...newItem, agent: e.target.value })}
               />
             </div>
-            
+
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddingItem(false)}>
+              <Button variant="outline" onClick={() => setIsAddingItem(false)} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleAddItem}>
-                Add to Knowledge Base
+              <Button onClick={handleAddItem} disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Add to Knowledge Base"
+                )}
               </Button>
             </div>
           </CardContent>
@@ -317,76 +286,88 @@ export default function KnowledgeBaseManager() {
       <Card>
         <CardHeader>
           <CardTitle>Knowledge Base</CardTitle>
-          <CardDescription>
-            All knowledge items available to your AI agents
-          </CardDescription>
+          <CardDescription>All knowledge items available to your AI agents</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Tags</TableHead>
-                <TableHead>Agent</TableHead>
-                <TableHead>Last Updated</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="font-medium">{item.title}</div>
-                    <div className="text-sm text-muted-foreground line-clamp-1">
-                      {item.content.substring(0, 100)}...
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {getTypeIcon(item.type)}
-                      <span className="capitalize">{item.type}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {item.tags.slice(0, 3).map((tag, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {item.tags.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{item.tags.length - 3}
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.agent}</TableCell>
-                  <TableCell>{item.lastUpdated}</TableCell>
-                  <TableCell>{getStatusBadge(item.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost">
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="text-red-600 hover:text-red-700">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Tags</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Last Updated</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {filteredItems.length === 0 && (
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="font-medium">{item.title}</div>
+                      <div className="text-sm text-muted-foreground line-clamp-1">
+                        {item.content.substring(0, 100)}
+                        {item.content.length > 100 ? "…" : ""}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getTypeIcon(item.type)}
+                        <span className="capitalize">{item.type}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {item.tags.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="secondary" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {item.tags.length > 3 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{item.tags.length - 3}
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{item.agent || "—"}</TableCell>
+                    <TableCell>{new Date(item.lastUpdated).toLocaleDateString()}</TableCell>
+                    <TableCell>{getStatusBadge(item.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="ghost" aria-label="Edit">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700"
+                          aria-label="Delete"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {!isLoading && filteredItems.length === 0 && (
             <div className="text-center py-12">
               <FileText className="h-12 w-12 mx-auto text-gray-400" />
               <h3 className="mt-4 text-lg font-semibold">No Knowledge Items Found</h3>
               <p className="text-muted-foreground mt-2">
-                {searchQuery ? "Try a different search term" : "Add your first knowledge item to get started"}
+                {searchQuery
+                  ? "Try a different search term"
+                  : "Add your first knowledge item to get started"}
               </p>
               <Button onClick={() => setIsAddingItem(true)} className="mt-4">
                 Add Knowledge Item
@@ -404,20 +385,18 @@ export default function KnowledgeBaseManager() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{knowledgeItems.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Across all agents
-            </p>
+            <p className="text-xs text-muted-foreground">Across all agents</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Knowledge Types</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {["document", "database", "web", "manual"].map((type) => {
-                const count = knowledgeItems.filter(item => item.type === type).length
+              {(["document", "database", "web", "manual"] as KnowledgeType[]).map((type) => {
+                const count = knowledgeItems.filter((item) => item.type === type).length
                 return (
                   <div key={type} className="flex justify-between items-center">
                     <span className="text-sm capitalize">{type}</span>
@@ -428,19 +407,18 @@ export default function KnowledgeBaseManager() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Storage Usage</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Items</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">28.6 MB</div>
-            <p className="text-xs text-muted-foreground">
-              Total knowledge base size
-            </p>
-            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-600 h-2 rounded-full" style={{ width: "45%" }} />
+            <div className="text-2xl font-bold">
+              {knowledgeItems.filter((i) => i.status === "active").length}
             </div>
+            <p className="text-xs text-muted-foreground">
+              {knowledgeItems.filter((i) => i.status === "pending").length} pending review
+            </p>
           </CardContent>
         </Card>
       </div>

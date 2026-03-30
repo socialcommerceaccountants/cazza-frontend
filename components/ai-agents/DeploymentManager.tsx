@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -10,102 +10,55 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Rocket, GitBranch, Globe, Server, Lock, Unlock, Play, Pause, RefreshCw, Download, Upload, Settings, Copy } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Rocket,
+  GitBranch,
+  Globe,
+  Server,
+  Lock,
+  Unlock,
+  Play,
+  RefreshCw,
+  Download,
+  Upload,
+  Settings,
+  Copy,
+  Loader2,
+} from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import context7API, { Deployment } from "@/lib/context7-api"
+import { useAuthStore } from "@/lib/store/auth-store"
 
-interface Deployment {
-  id: string
-  agent: string
-  version: string
-  environment: "development" | "staging" | "production"
-  status: "active" | "deploying" | "paused" | "failed"
-  deployedAt: string
-  deployedBy: string
-  endpoints: string[]
-  metrics: {
-    uptime: string
-    requests: number
-    avgResponseTime: number
-    errorRate: number
-  }
-}
+type Environment = Deployment["environment"]
 
 export default function DeploymentManager() {
+  const { token } = useAuthStore()
+  const { toast } = useToast()
+
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>("all")
   const [isDeploying, setIsDeploying] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [deployLogs, setDeployLogs] = useState<string[]>([])
+  const [deployments, setDeployments] = useState<Deployment[]>([])
+  const [rollbackTarget, setRollbackTarget] = useState<string | null>(null)
+  const [isRollingBack, setIsRollingBack] = useState(false)
+
   const [newDeployment, setNewDeployment] = useState({
     agent: "",
     version: "",
-    environment: "staging" as const,
+    environment: "staging" as Environment,
     notes: "",
+    autoRollback: false,
+    notifyTeam: true,
   })
-
-  const deployments: Deployment[] = [
-    {
-      id: "1",
-      agent: "Cazza Sales Assistant",
-      version: "v2.1.0",
-      environment: "production",
-      status: "active",
-      deployedAt: "2024-03-27 10:30",
-      deployedBy: "admin@cazza.ai",
-      endpoints: ["https://api.cazza.ai/v1/agents/sales", "https://api.cazza.ai/v1/agents/sales/query"],
-      metrics: {
-        uptime: "99.8%",
-        requests: 15420,
-        avgResponseTime: 1.2,
-        errorRate: 0.2,
-      },
-    },
-    {
-      id: "2",
-      agent: "Cazza Financial Advisor",
-      version: "v1.3.2",
-      environment: "production",
-      status: "active",
-      deployedAt: "2024-03-26 14:15",
-      deployedBy: "admin@cazza.ai",
-      endpoints: ["https://api.cazza.ai/v1/agents/finance"],
-      metrics: {
-        uptime: "99.5%",
-        requests: 8920,
-        avgResponseTime: 1.8,
-        errorRate: 0.5,
-      },
-    },
-    {
-      id: "3",
-      agent: "Cazza Marketing Analyst",
-      version: "v1.2.5",
-      environment: "staging",
-      status: "deploying",
-      deployedAt: "2024-03-27 15:45",
-      deployedBy: "dev@cazza.ai",
-      endpoints: ["https://staging.api.cazza.ai/v1/agents/marketing"],
-      metrics: {
-        uptime: "100%",
-        requests: 1250,
-        avgResponseTime: 1.5,
-        errorRate: 0.1,
-      },
-    },
-    {
-      id: "4",
-      agent: "Cazza Sales Assistant",
-      version: "v2.0.9",
-      environment: "development",
-      status: "paused",
-      deployedAt: "2024-03-25 09:20",
-      deployedBy: "dev@cazza.ai",
-      endpoints: ["http://localhost:8000/v1/agents/sales"],
-      metrics: {
-        uptime: "95.2%",
-        requests: 450,
-        avgResponseTime: 2.1,
-        errorRate: 1.2,
-      },
-    },
-  ]
 
   const agents = [
     { id: "cazza_sales_assistant", name: "Cazza Sales Assistant", versions: ["v2.1.0", "v2.0.9", "v1.9.4"] },
@@ -113,110 +66,178 @@ export default function DeploymentManager() {
     { id: "cazza_marketing_analyst", name: "Cazza Marketing Analyst", versions: ["v1.2.5", "v1.2.4", "v1.1.9"] },
   ]
 
-  const filteredDeployments = selectedEnvironment === "all" 
-    ? deployments 
-    : deployments.filter(d => d.environment === selectedEnvironment)
-
-  const getStatusBadge = (status: Deployment["status"]) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
-      case "deploying":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Deploying</Badge>
-      case "paused":
-        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Paused</Badge>
-      case "failed":
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>
+  const loadDeployments = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      if (token) context7API.setToken(token)
+      const env = selectedEnvironment !== "all" ? selectedEnvironment : undefined
+      const data = await context7API.listDeployments(env)
+      setDeployments(data)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load deployments"
+      toast({ title: "Error", description: message, variant: "destructive" })
+    } finally {
+      setIsLoading(false)
     }
-  }
+  }, [token, selectedEnvironment, toast])
 
-  const getEnvironmentBadge = (environment: Deployment["environment"]) => {
-    switch (environment) {
-      case "production":
-        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Production</Badge>
-      case "staging":
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Staging</Badge>
-      case "development":
-        return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Development</Badge>
-    }
-  }
+  useEffect(() => {
+    loadDeployments()
+  }, [loadDeployments])
 
-  const simulateDeployment = () => {
+  const filteredDeployments =
+    selectedEnvironment === "all"
+      ? deployments
+      : deployments.filter((d) => d.environment === selectedEnvironment)
+
+  const handleDeploy = async () => {
     if (!newDeployment.agent || !newDeployment.version) {
-      alert("Please select an agent and version")
+      toast({
+        title: "Incomplete form",
+        description: "Please select an agent and version before deploying.",
+        variant: "destructive",
+      })
       return
     }
 
     setIsDeploying(true)
-    setDeployLogs([])
+    setDeployLogs(["Starting deployment process..."])
 
-    const logs = [
-      "Starting deployment process...",
-      "Validating agent configuration...",
-      "Checking dependencies...",
-      "Building agent package...",
-      "Running tests...",
-      "Deploying to staging environment...",
-      "Waiting for health checks...",
-      "Deployment completed successfully!",
-    ]
+    try {
+      if (token) context7API.setToken(token)
 
-    let index = 0
-    const interval = setInterval(() => {
-      if (index < logs.length) {
-        setDeployLogs(prev => [...prev, logs[index]])
-        index++
-      } else {
-        clearInterval(interval)
-        setIsDeploying(false)
-        
-        // Reset form
-        setNewDeployment({
-          agent: "",
-          version: "",
-          environment: "staging",
-          notes: "",
-        })
-        
-        alert("Deployment completed successfully!")
-      }
-    }, 1000)
+      const logSteps = [
+        "Validating agent configuration...",
+        "Checking dependencies...",
+        "Building agent package...",
+        "Running pre-deploy tests...",
+        `Deploying to ${newDeployment.environment} environment...`,
+        "Waiting for health checks...",
+      ]
+
+      // Stream log messages while calling the real deploy API
+      let stepIndex = 0
+      const logInterval = setInterval(() => {
+        if (stepIndex < logSteps.length) {
+          setDeployLogs((prev) => [...prev, logSteps[stepIndex]])
+          stepIndex++
+        } else {
+          clearInterval(logInterval)
+        }
+      }, 800)
+
+      const deployment = await context7API.deployAgent({
+        agent_id: newDeployment.agent,
+        version: newDeployment.version,
+        environment: newDeployment.environment,
+        notes: newDeployment.notes || undefined,
+      })
+
+      clearInterval(logInterval)
+      setDeployLogs((prev) => [...prev, "Deployment completed successfully!"])
+      setDeployments((prev) => [deployment, ...prev])
+
+      setNewDeployment({ agent: "", version: "", environment: "staging", notes: "", autoRollback: false, notifyTeam: true })
+      toast({
+        title: "Deployment successful",
+        description: `${newDeployment.agent} ${newDeployment.version} deployed to ${newDeployment.environment}.`,
+      })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Deployment failed"
+      setDeployLogs((prev) => [...prev, `Error: ${message}`])
+      toast({ title: "Deployment failed", description: message, variant: "destructive" })
+    } finally {
+      setIsDeploying(false)
+    }
   }
 
-  const handleRollback = (deploymentId: string) => {
-    if (confirm("Are you sure you want to rollback this deployment?")) {
-      console.log("Rolling back deployment:", deploymentId)
-      alert("Rollback initiated. Check deployment logs for progress.")
+  const handleRollback = async () => {
+    if (!rollbackTarget) return
+    try {
+      setIsRollingBack(true)
+      if (token) context7API.setToken(token)
+      await context7API.rollbackDeployment(rollbackTarget)
+      await loadDeployments()
+      toast({ title: "Rollback initiated", description: "The deployment has been rolled back." })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Rollback failed"
+      toast({ title: "Rollback failed", description: message, variant: "destructive" })
+    } finally {
+      setIsRollingBack(false)
+      setRollbackTarget(null)
+    }
+  }
+
+  const handleCopyEndpoint = async (endpoint: string) => {
+    try {
+      await navigator.clipboard.writeText(endpoint)
+      toast({ title: "Copied", description: "Endpoint copied to clipboard." })
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" })
+    }
+  }
+
+  const getStatusBadge = (status: Deployment["status"]) => {
+    switch (status) {
+      case "active": return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>
+      case "deploying": return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Deploying</Badge>
+      case "paused": return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">Paused</Badge>
+      case "failed": return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Failed</Badge>
+    }
+  }
+
+  const getEnvironmentBadge = (environment: Environment) => {
+    switch (environment) {
+      case "production": return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Production</Badge>
+      case "staging": return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Staging</Badge>
+      case "development": return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">Development</Badge>
     }
   }
 
   return (
     <div className="space-y-6">
+      {/* Rollback confirmation dialog */}
+      <Dialog open={!!rollbackTarget} onOpenChange={(open) => { if (!open) setRollbackTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Rollback</DialogTitle>
+            <DialogDescription>
+              This will roll back the deployment to the previous version. Active traffic will be
+              redirected immediately. This action cannot be undone automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRollbackTarget(null)} disabled={isRollingBack}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRollback} disabled={isRollingBack}>
+              {isRollingBack ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Rolling back...</> : "Confirm Rollback"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Deployment Controls */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* New Deployment Form */}
         <Card>
           <CardHeader>
             <CardTitle>New Deployment</CardTitle>
-            <CardDescription>
-              Deploy a new version of an AI agent
-            </CardDescription>
+            <CardDescription>Deploy a new version of an AI agent</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="deploy-agent">Select Agent</Label>
-              <Select 
-                value={newDeployment.agent} 
-                onValueChange={(value) => setNewDeployment({...newDeployment, agent: value || ""})}
+              <Select
+                value={newDeployment.agent}
+                onValueChange={(value) => setNewDeployment({ ...newDeployment, agent: value || "", version: "" })}
               >
-                <SelectTrigger>
+                <SelectTrigger id="deploy-agent">
                   <SelectValue placeholder="Choose an agent" />
                 </SelectTrigger>
                 <SelectContent>
                   {agents.map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.name}
-                    </SelectItem>
+                    <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -224,33 +245,31 @@ export default function DeploymentManager() {
 
             <div className="space-y-2">
               <Label htmlFor="deploy-version">Version</Label>
-              <Select 
-                value={newDeployment.version} 
-                onValueChange={(value) => setNewDeployment({...newDeployment, version: value || ""})}
+              <Select
+                value={newDeployment.version}
+                onValueChange={(value) => setNewDeployment({ ...newDeployment, version: value || "" })}
                 disabled={!newDeployment.agent}
               >
-                <SelectTrigger>
+                <SelectTrigger id="deploy-version">
                   <SelectValue placeholder="Select version" />
                 </SelectTrigger>
                 <SelectContent>
-                  {agents
-                    .find(a => a.id === newDeployment.agent)
-                    ?.versions.map((version) => (
-                      <SelectItem key={version} value={version}>
-                        {version}
-                      </SelectItem>
-                    ))}
+                  {agents.find((a) => a.id === newDeployment.agent)?.versions.map((version) => (
+                    <SelectItem key={version} value={version}>{version}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="deploy-environment">Environment</Label>
-              <Select 
-                value={newDeployment.environment} 
-                onValueChange={(value: any) => setNewDeployment({...newDeployment, environment: value})}
+              <Select
+                value={newDeployment.environment}
+                onValueChange={(value: Environment) =>
+                  setNewDeployment({ ...newDeployment, environment: value })
+                }
               >
-                <SelectTrigger>
+                <SelectTrigger id="deploy-environment">
                   <SelectValue placeholder="Select environment" />
                 </SelectTrigger>
                 <SelectContent>
@@ -268,27 +287,38 @@ export default function DeploymentManager() {
                 placeholder="Describe what's new in this version..."
                 rows={3}
                 value={newDeployment.notes}
-                onChange={(e) => setNewDeployment({...newDeployment, notes: e.target.value})}
+                onChange={(e) => setNewDeployment({ ...newDeployment, notes: e.target.value })}
               />
             </div>
 
             <div className="flex items-center space-x-2">
-              <Switch id="auto-rollback" />
+              <Switch
+                id="auto-rollback"
+                checked={newDeployment.autoRollback}
+                onCheckedChange={(checked) => setNewDeployment({ ...newDeployment, autoRollback: checked })}
+              />
               <Label htmlFor="auto-rollback">Enable auto-rollback on failure</Label>
             </div>
 
             <div className="flex items-center space-x-2">
-              <Switch id="notify-team" defaultChecked />
+              <Switch
+                id="notify-team"
+                checked={newDeployment.notifyTeam}
+                onCheckedChange={(checked) => setNewDeployment({ ...newDeployment, notifyTeam: checked })}
+              />
               <Label htmlFor="notify-team">Notify team on completion</Label>
             </div>
 
-            <Button 
-              onClick={simulateDeployment} 
+            <Button
+              onClick={handleDeploy}
               className="w-full gap-2"
               disabled={isDeploying || !newDeployment.agent || !newDeployment.version}
             >
-              <Rocket className="h-4 w-4" />
-              {isDeploying ? "Deploying..." : "Deploy Agent"}
+              {isDeploying ? (
+                <><Loader2 className="h-4 w-4 animate-spin" />Deploying...</>
+              ) : (
+                <><Rocket className="h-4 w-4" />Deploy Agent</>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -297,9 +327,7 @@ export default function DeploymentManager() {
         <Card>
           <CardHeader>
             <CardTitle>Deployment Logs</CardTitle>
-            <CardDescription>
-              Real-time deployment progress and logs
-            </CardDescription>
+            <CardDescription>Real-time deployment progress and logs</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-64 overflow-y-auto rounded-lg bg-gray-900 text-gray-100 p-4 font-mono text-sm">
@@ -315,13 +343,13 @@ export default function DeploymentManager() {
                 ))
               )}
               {isDeploying && (
-                <div className="flex items-center gap-2">
-                  <div className="animate-pulse">●</div>
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
                   <span>Processing...</span>
                 </div>
               )}
             </div>
-            
+
             <div className="mt-4 flex gap-2">
               <Button variant="outline" size="sm" className="gap-1">
                 <Download className="h-3 w-3" />
@@ -331,12 +359,7 @@ export default function DeploymentManager() {
                 <Upload className="h-3 w-3" />
                 Share Logs
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="gap-1"
-                onClick={() => setDeployLogs([])}
-              >
+              <Button variant="outline" size="sm" className="gap-1" onClick={() => setDeployLogs([])}>
                 Clear Logs
               </Button>
             </div>
@@ -345,120 +368,113 @@ export default function DeploymentManager() {
       </div>
 
       {/* Environment Filter */}
-      <div className="flex gap-2">
-        <Button
-          variant={selectedEnvironment === "all" ? "default" : "outline"}
-          onClick={() => setSelectedEnvironment("all")}
-        >
-          All Environments
-        </Button>
-        <Button
-          variant={selectedEnvironment === "development" ? "default" : "outline"}
-          onClick={() => setSelectedEnvironment("development")}
-          className="gap-1"
-        >
-          <Server className="h-4 w-4" />
-          Development
-        </Button>
-        <Button
-          variant={selectedEnvironment === "staging" ? "default" : "outline"}
-          onClick={() => setSelectedEnvironment("staging")}
-          className="gap-1"
-        >
-          <GitBranch className="h-4 w-4" />
-          Staging
-        </Button>
-        <Button
-          variant={selectedEnvironment === "production" ? "default" : "outline"}
-          onClick={() => setSelectedEnvironment("production")}
-          className="gap-1"
-        >
-          <Globe className="h-4 w-4" />
-          Production
-        </Button>
+      <div className="flex gap-2 flex-wrap">
+        {(["all", "development", "staging", "production"] as const).map((env) => (
+          <Button
+            key={env}
+            variant={selectedEnvironment === env ? "default" : "outline"}
+            onClick={() => setSelectedEnvironment(env)}
+            className="gap-1"
+          >
+            {env === "development" && <Server className="h-4 w-4" />}
+            {env === "staging" && <GitBranch className="h-4 w-4" />}
+            {env === "production" && <Globe className="h-4 w-4" />}
+            {env === "all" ? "All Environments" : env.charAt(0).toUpperCase() + env.slice(1)}
+          </Button>
+        ))}
       </div>
 
       {/* Deployments Table */}
       <Card>
         <CardHeader>
           <CardTitle>Active Deployments</CardTitle>
-          <CardDescription>
-            Manage and monitor all agent deployments
-          </CardDescription>
+          <CardDescription>Manage and monitor all agent deployments</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Agent</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Deployed At</TableHead>
-                <TableHead>Metrics</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredDeployments.map((deployment) => (
-                <TableRow key={deployment.id}>
-                  <TableCell className="font-medium">{deployment.agent}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <GitBranch className="h-4 w-4 text-muted-foreground" />
-                      {deployment.version}
-                    </div>
-                  </TableCell>
-                  <TableCell>{getEnvironmentBadge(deployment.environment)}</TableCell>
-                  <TableCell>{getStatusBadge(deployment.status)}</TableCell>
-                  <TableCell>
-                    <div>{deployment.deployedAt}</div>
-                    <div className="text-sm text-muted-foreground">by {deployment.deployedBy}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span>Uptime:</span>
-                        <span className="font-medium">{deployment.metrics.uptime}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Requests:</span>
-                        <span className="font-medium">{deployment.metrics.requests.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Response Time:</span>
-                        <span className="font-medium">{deployment.metrics.avgResponseTime}s</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="outline" className="gap-1">
-                        <Settings className="h-3 w-3" />
-                        Configure
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleRollback(deployment.id)}
-                        className="gap-1"
-                      >
-                        <RefreshCw className="h-3 w-3" />
-                        Rollback
-                      </Button>
-                    </div>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Environment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Deployed At</TableHead>
+                  <TableHead>Metrics</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {filteredDeployments.length === 0 && (
+              </TableHeader>
+              <TableBody>
+                {filteredDeployments.map((deployment) => (
+                  <TableRow key={deployment.id}>
+                    <TableCell className="font-medium">{deployment.agent}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <GitBranch className="h-4 w-4 text-muted-foreground" />
+                        {deployment.version}
+                      </div>
+                    </TableCell>
+                    <TableCell>{getEnvironmentBadge(deployment.environment)}</TableCell>
+                    <TableCell>{getStatusBadge(deployment.status)}</TableCell>
+                    <TableCell>
+                      <div>{deployment.deployedAt}</div>
+                      <div className="text-sm text-muted-foreground">by {deployment.deployedBy}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span>Uptime:</span>
+                          <span className="font-medium">{deployment.metrics.uptime}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Requests:</span>
+                          <span className="font-medium">{deployment.metrics.requests.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Avg Response:</span>
+                          <span className="font-medium">{deployment.metrics.avgResponseTime}s</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Error Rate:</span>
+                          <span className={`font-medium ${deployment.metrics.errorRate > 1 ? "text-red-600" : "text-green-600"}`}>
+                            {deployment.metrics.errorRate}%
+                          </span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" className="gap-1">
+                          <Settings className="h-3 w-3" />
+                          Configure
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() => setRollbackTarget(deployment.id)}
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Rollback
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {!isLoading && filteredDeployments.length === 0 && (
             <div className="text-center py-12">
               <Rocket className="h-12 w-12 mx-auto text-gray-400" />
               <h3 className="mt-4 text-lg font-semibold">No Deployments Found</h3>
               <p className="text-muted-foreground mt-2">
-                {selectedEnvironment !== "all" 
+                {selectedEnvironment !== "all"
                   ? `No deployments in ${selectedEnvironment} environment`
                   : "No deployments yet"}
               </p>
@@ -474,48 +490,42 @@ export default function DeploymentManager() {
             <CardTitle className="text-sm font-medium">Total Deployments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">24</div>
-            <p className="text-xs text-muted-foreground">
-              Across all environments
-            </p>
+            <div className="text-2xl font-bold">{deployments.length}</div>
+            <p className="text-xs text-muted-foreground">Across all environments</p>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Active Deployments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {deployments.filter(d => d.status === "active").length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Currently running
-            </p>
+            <div className="text-2xl font-bold">{deployments.filter((d) => d.status === "active").length}</div>
+            <p className="text-xs text-muted-foreground">Currently running</p>
           </CardContent>
         </Card>
-        
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Avg Uptime</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">99.4%</div>
-            <p className="text-xs text-muted-foreground">
-              Across all agents
-            </p>
-          </CardContent>
-        </Card>
-        
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Failed Deployments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2</div>
-            <p className="text-xs text-muted-foreground">
-              Last 30 days
-            </p>
+            <div className="text-2xl font-bold">{deployments.filter((d) => d.status === "failed").length}</div>
+            <p className="text-xs text-muted-foreground">Require attention</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Avg Error Rate</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {deployments.length > 0
+                ? (deployments.reduce((s, d) => s + d.metrics.errorRate, 0) / deployments.length).toFixed(1)
+                : "0.0"}%
+            </div>
+            <p className="text-xs text-muted-foreground">Across active agents</p>
           </CardContent>
         </Card>
       </div>
@@ -524,14 +534,12 @@ export default function DeploymentManager() {
       <Card>
         <CardHeader>
           <CardTitle>API Endpoints</CardTitle>
-          <CardDescription>
-            Available endpoints for your deployed agents
-          </CardDescription>
+          <CardDescription>Available endpoints for your deployed agents</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {deployments
-              .filter(d => d.status === "active")
+              .filter((d) => d.status === "active")
               .map((deployment) => (
                 <div key={deployment.id} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -547,10 +555,15 @@ export default function DeploymentManager() {
                     </Badge>
                   </div>
                   <div className="space-y-2">
-                    {deployment.endpoints.map((endpoint, index) => (
-                      <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                    {deployment.endpoints.map((endpoint) => (
+                      <div key={endpoint} className="flex items-center justify-between p-2 bg-muted rounded">
                         <code className="text-sm">{endpoint}</code>
-                        <Button size="sm" variant="ghost" className="gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="gap-1"
+                          onClick={() => handleCopyEndpoint(endpoint)}
+                        >
                           <Copy className="h-3 w-3" />
                           Copy
                         </Button>
@@ -573,6 +586,9 @@ export default function DeploymentManager() {
                   </div>
                 </div>
               ))}
+            {deployments.filter((d) => d.status === "active").length === 0 && (
+              <p className="text-center text-muted-foreground py-6">No active deployments yet.</p>
+            )}
           </div>
         </CardContent>
       </Card>
