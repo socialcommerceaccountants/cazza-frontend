@@ -22,9 +22,11 @@ import {
   Globe,
   Shield,
   Loader2,
+  Zap,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
 
 interface IntegrationStatus {
   id: string;
@@ -57,7 +59,9 @@ const INTEGRATION_META: Record<string, {
   description: string;
   icon: React.ReactNode;
   color: string;
-  authUrl: string;
+  // Either an API path to fetch OAuth URL from, or a local config page to navigate to
+  authUrl?: string;
+  configPage?: string;
   syncUrl: string;
   disconnectUrl: string;
 }> = {
@@ -70,6 +74,15 @@ const INTEGRATION_META: Record<string, {
     syncUrl: '/integrations/xero/sync',
     disconnectUrl: '/integrations/xero/disconnect',
   },
+  quickbooks: {
+    name: 'QuickBooks Online',
+    description: 'UK accounting with MTD compliance and VAT returns',
+    icon: <CreditCard className="h-5 w-5" />,
+    color: 'bg-green-600',
+    configPage: '/integrations/quickbooks',
+    syncUrl: '/integrations/quickbooks/sync',
+    disconnectUrl: '/integrations/quickbooks/disconnect',
+  },
   shopify: {
     name: 'Shopify',
     description: 'E-commerce integration with order and product sync',
@@ -78,6 +91,15 @@ const INTEGRATION_META: Record<string, {
     authUrl: '/integrations/shopify/auth-url',
     syncUrl: '/integrations/shopify/sync',
     disconnectUrl: '/integrations/shopify/disconnect',
+  },
+  woocommerce: {
+    name: 'WooCommerce',
+    description: 'WordPress e-commerce with UK/EU VAT support',
+    icon: <ShoppingCart className="h-5 w-5" />,
+    color: 'bg-orange-500',
+    configPage: '/integrations/woocommerce',
+    syncUrl: '/integrations/woocommerce/sync',
+    disconnectUrl: '/integrations/woocommerce/disconnect',
   },
   'tiktok-shop': {
     name: 'TikTok Shop',
@@ -89,13 +111,31 @@ const INTEGRATION_META: Record<string, {
     disconnectUrl: '/integrations/tiktok/disconnect',
   },
   stripe: {
-    name: 'Stripe',
+    name: 'Stripe Billing',
     description: 'Payment processing and subscription management',
     icon: <CreditCard className="h-5 w-5" />,
     color: 'bg-purple-500',
-    authUrl: '/integrations/stripe/auth-url',
+    configPage: '/integrations/billing',
     syncUrl: '/integrations/stripe/sync',
     disconnectUrl: '/integrations/stripe/disconnect',
+  },
+  paddle: {
+    name: 'Paddle',
+    description: 'Merchant of record with global tax compliance',
+    icon: <Globe className="h-5 w-5" />,
+    color: 'bg-red-500',
+    configPage: '/integrations/billing',
+    syncUrl: '/integrations/paddle/sync',
+    disconnectUrl: '/integrations/paddle/disconnect',
+  },
+  webhooks: {
+    name: 'Webhooks',
+    description: 'Zapier, Make.com, and custom app integrations',
+    icon: <Zap className="h-5 w-5" />,
+    color: 'bg-yellow-500',
+    configPage: '/integrations/webhooks',
+    syncUrl: '/integrations/webhooks/sync',
+    disconnectUrl: '/integrations/webhooks/disconnect',
   },
 };
 
@@ -103,6 +143,7 @@ const INTEGRATION_IDS = Object.keys(INTEGRATION_META);
 
 export default function IntegrationDashboard() {
   const { toast } = useToast();
+  const router = useRouter();
   const [statuses, setStatuses] = useState<Record<string, IntegrationStatus>>({});
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -153,8 +194,16 @@ export default function IntegrationDashboard() {
   const handleConnect = async (integrationId: string) => {
     const meta = INTEGRATION_META[integrationId];
     if (!meta) return;
+
+    // Integrations with a dedicated config page navigate there directly
+    if (meta.configPage) {
+      router.push(meta.configPage);
+      return;
+    }
+
+    // OAuth-based integrations: fetch auth URL from backend, then redirect
     try {
-      const { url } = await apiClient.get<{ url: string }>(meta.authUrl);
+      const { url } = await apiClient.get<{ url: string }>(meta.authUrl!);
       window.location.href = url;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : `Failed to connect to ${meta.name}`;

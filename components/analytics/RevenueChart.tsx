@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -17,66 +17,55 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Download, TrendingUp, TrendingDown } from "lucide-react";
+import { Download, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
-
-interface RevenueData {
-  date: string;
-  revenue: number;
-  expenses: number;
-  profit: number;
-  growth: number;
-}
+import { useRevenueAnalytics } from "@/lib/hooks/useAnalytics";
+import { RevenueDataPoint } from "@/lib/api/analytics";
 
 interface RevenueChartProps {
-  data?: RevenueData[];
   timeRange?: "7d" | "30d" | "90d" | "1y";
 }
 
-const generateMockData = (timeRange: string = "30d"): RevenueData[] => {
-  const data: RevenueData[] = [];
-  const days = timeRange === "7d" ? 7 : timeRange === "90d" ? 90 : timeRange === "1y" ? 365 : 30;
-  
-  let baseRevenue = 50000;
-  for (let i = 0; i < days; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - i - 1));
-    
-    const revenue = baseRevenue + Math.random() * 15000 - 5000;
-    const expenses = revenue * (0.3 + Math.random() * 0.2);
-    const profit = revenue - expenses;
-    const growth = i > 0 ? ((revenue - baseRevenue) / baseRevenue) * 100 : 0;
-    
-    data.push({
-      date: date.toISOString().split("T")[0],
-      revenue: Math.round(revenue),
-      expenses: Math.round(expenses),
-      profit: Math.round(profit),
-      growth: parseFloat(growth.toFixed(2)),
-    });
-    
-    baseRevenue = revenue;
-  }
-  
-  return data;
-};
-
-export default function RevenueChart({ data, timeRange = "30d" }: RevenueChartProps) {
-  const [chartData, setChartData] = useState<RevenueData[]>(data || generateMockData(timeRange));
+export default function RevenueChart({ timeRange = "30d" }: RevenueChartProps) {
   const [activeTab, setActiveTab] = useState<"line" | "bar">("line");
   const [isExporting, setIsExporting] = useState(false);
+  
+  const { data: chartData, metrics, isLoading, error, refetch } = useRevenueAnalytics(timeRange);
 
-  useEffect(() => {
-    if (!data) {
-      setChartData(generateMockData(timeRange));
-    }
-  }, [timeRange, data]);
+  const handleExportCSV = () => {
+    if (!chartData) return;
+    
+    setIsExporting(true);
+    const headers = ["Date", "Revenue", "Expenses", "Profit", "Growth (%)"];
+    const csvContent = [
+      headers.join(","),
+      ...chartData.map(item => [
+        item.date,
+        item.revenue,
+        item.expenses,
+        item.profit,
+        item.growth
+      ].join(","))
+    ].join("\n");
 
-  const totalRevenue = chartData.reduce((sum, item) => sum + item.revenue, 0);
-  const totalProfit = chartData.reduce((sum, item) => sum + item.profit, 0);
-  const avgGrowth = chartData.length > 1 
-    ? chartData.slice(1).reduce((sum, item) => sum + item.growth, 0) / (chartData.length - 1)
-    : 0;
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `revenue-data-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    setIsExporting(false);
+  };
+
+  const handleExportPNG = () => {
+    setIsExporting(true);
+    // In a real implementation, this would use html2canvas or similar
+    setTimeout(() => {
+      alert("PNG export would be implemented with html2canvas in production");
+      setIsExporting(false);
+    }, 500);
+  };
 
   const handleExportCSV = () => {
     setIsExporting(true);
