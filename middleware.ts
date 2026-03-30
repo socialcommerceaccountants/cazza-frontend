@@ -18,6 +18,12 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
+// CORS: only allow explicitly configured origins (defaults to app URL)
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const ALLOWED_ORIGINS: string[] = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : [appUrl];
+
 // Public routes that don't require authentication
 const PUBLIC_ROUTES = [
   '/',
@@ -198,13 +204,16 @@ export async function middleware(request: NextRequest) {
     response.headers.set(key, value);
   }
   
-  // Add CORS headers for API routes
+  // Add CORS headers for API routes — only for whitelisted origins
   if (pathname.startsWith('/api/')) {
-    response.headers.set('Access-Control-Allow-Credentials', 'true');
-    response.headers.set('Access-Control-Allow-Origin', request.headers.get('origin') || '');
-    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
-    
+    const origin = request.headers.get('origin');
+    if (origin && ALLOWED_ORIGINS.includes(origin)) {
+      response.headers.set('Access-Control-Allow-Origin', origin);
+      response.headers.set('Access-Control-Allow-Credentials', 'true');
+      response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+    }
+
     // Handle preflight requests
     if (method === 'OPTIONS') {
       return new NextResponse(null, { status: 204, headers: response.headers });
@@ -248,10 +257,7 @@ export async function middleware(request: NextRequest) {
   // Add request ID for tracing
   const requestId = crypto.randomUUID();
   response.headers.set('X-Request-ID', requestId);
-  
-  // Log request (in production, use proper logging)
-  console.log(`[${requestId}] ${method} ${pathname} - ${request.ip}`);
-  
+
   return response;
 }
 
@@ -275,10 +281,10 @@ export const config = {
  * Helper function to create authenticated API responses
  */
 export function createAuthenticatedResponse(
-  data: any,
+  data: unknown,
   options: {
     status?: number;
-    cookies?: { name: string; value: string; options?: any }[];
+    cookies?: { name: string; value: string; options?: Record<string, unknown> }[];
     csrfToken?: string;
   } = {}
 ): NextResponse {
@@ -312,7 +318,7 @@ export function createErrorResponse(
   error: string,
   code: string,
   status: number = 400,
-  details?: any
+  details?: Record<string, unknown>
 ): NextResponse {
   return createAuthenticatedResponse(
     { error, code, details },
@@ -325,7 +331,7 @@ export function createErrorResponse(
  */
 export async function validateRequestBody<T>(
   request: NextRequest,
-  validator: (data: any) => data is T
+  validator: (data: unknown) => data is T
 ): Promise<{ valid: true; data: T } | { valid: false; error: string }> {
   try {
     const body = await request.json();

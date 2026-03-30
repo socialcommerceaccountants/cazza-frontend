@@ -20,7 +20,17 @@ export default function Home() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showQuickStart, setShowQuickStart] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
-  const [userProgress, setUserProgress] = useState(() => initializeUserProgress("user-123")); // Mock user ID
+  // Use a stable per-browser identity for feature discovery progress (not tied to auth)
+  const [userProgress, setUserProgress] = useState(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('cazza_progress_id') : null;
+    const id = stored ?? 'local';
+    if (!stored && typeof window !== 'undefined') {
+      const newId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : 'local';
+      try { localStorage.setItem('cazza_progress_id', newId); } catch { /* private mode */ }
+      return initializeUserProgress(newId);
+    }
+    return initializeUserProgress(id);
+  });
 
   useEffect(() => {
     // Check if user is new (no localStorage entry)
@@ -39,9 +49,8 @@ export default function Home() {
       
       // Load demo data if in demo mode
       if (demoActive) {
-        const demoData = getQuickDemoData();
-        console.log("Demo mode active, data:", demoData);
-        // In production, this would update the app state
+        // Demo data loaded; in production this updates app state via a store or context
+        getQuickDemoData();
       }
     }
   }, []);

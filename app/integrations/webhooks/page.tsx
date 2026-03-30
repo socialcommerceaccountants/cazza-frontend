@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Webhook, Zap, CheckCircle, AlertCircle, RefreshCw, Link, Trash2, Play, Shield } from "lucide-react";
+import { Loader2, Webhook, Zap, CheckCircle, AlertCircle, Play, Shield } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface WebhookConfig {
   id: number;
@@ -39,7 +40,17 @@ interface WebhookStats {
   event_stats: Record<string, { total: number; success: number }>;
 }
 
+const AVAILABLE_EVENTS = [
+  "order.created",
+  "order.updated",
+  "product.created",
+  "product.updated",
+  "customer.created",
+  "customer.updated",
+];
+
 export default function WebhooksIntegrationPage() {
+  const { toast } = useToast();
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
   const [stats, setStats] = useState<WebhookStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,44 +60,42 @@ export default function WebhooksIntegrationPage() {
   const [webhookEvents, setWebhookEvents] = useState<string[]>(["order.created", "order.updated"]);
   const [webhookSecret, setWebhookSecret] = useState("");
 
-  useEffect(() => {
-    fetchWebhooksData();
-  }, []);
-
-  const fetchWebhooksData = async () => {
+  const fetchWebhooksData = useCallback(async () => {
     try {
-      // Fetch webhooks
-      const webhooksResponse = await fetch("/api/integrations/webhooks");
-      const webhooksData = await webhooksResponse.json();
-      if (webhooksData.success) {
-        setWebhooks(webhooksData.webhooks);
-      }
+      const [webhooksRes, statsRes] = await Promise.all([
+        fetch("/api/integrations/webhooks"),
+        fetch("/api/integrations/webhooks/stats?days=30"),
+      ]);
 
-      // Fetch stats
-      const statsResponse = await fetch("/api/integrations/webhooks/stats?days=30");
-      const statsData = await statsResponse.json();
-      if (statsData.success) {
-        setStats(statsData);
+      if (webhooksRes.ok) {
+        const data = await webhooksRes.json();
+        if (data.success) setWebhooks(data.webhooks ?? []);
       }
-    } catch (error) {
-      console.error("Failed to fetch webhooks data:", error);
+      if (statsRes.ok) {
+        const data = await statsRes.json();
+        if (data.success) setStats(data);
+      }
+    } catch {
+      toast({ title: "Error", description: "Failed to load webhooks data.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchWebhooksData();
+  }, [fetchWebhooksData]);
 
   const createWebhook = async () => {
     if (!webhookName || !webhookUrl) {
-      alert("Please fill in all required fields");
+      toast({ title: "Validation Error", description: "Please fill in webhook name and URL.", variant: "destructive" });
       return;
     }
 
     try {
       const response = await fetch("/api/integrations/webhooks", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: webhookName,
           url: webhookUrl,
@@ -95,55 +104,79 @@ export default function WebhooksIntegrationPage() {
           enabled: true,
         }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert("Webhook created successfully!");
+        toast({ title: "Webhook Created", description: `"${webhookName}" created successfully.` });
         setCreateDialogOpen(false);
         resetForm();
         fetchWebhooksData();
       } else {
-        alert(`Creation failed: ${data.error}`);
+        throw new Error(data.error || "Creation failed");
       }
-    } catch (error) {
-      console.error("Creation failed:", error);
-      alert("Creation failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Creation failed";
+      toast({ title: "Creation Failed", description: message, variant: "destructive" });
     }
   };
 
-  const testWebhook = async (webhookId: number) => {
+  const testWebhook = async (webhookId: number, webhookName: string) => {
     try {
-      const response = await fetch(`/api/integrations/webhooks/${webhookId}/test`, {
-        method: "POST",
-      });
+      const response = await fetch(`/api/integrations/webhooks/${webhookId}/test`, { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert(`Webhook test ${data.status === "success" ? "passed" : "failed"}`);
+        const passed = data.status === "success";
+        toast({
+          title: passed ? "Test Passed" : "Test Failed",
+          description: `Webhook "${webhookName}" test ${passed ? "succeeded" : "failed"}.`,
+          variant: passed ? "default" : "destructive",
+        });
         fetchWebhooksData();
       } else {
-        alert(`Test failed: ${data.error}`);
+        throw new Error(data.error || "Test failed");
       }
-    } catch (error) {
-      console.error("Test failed:", error);
-      alert("Test failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Test failed";
+      toast({ title: "Test Failed", description: message, variant: "destructive" });
     }
   };
 
-  const toggleWebhook = async (webhookId: number, enabled: boolean) => {
+  const toggleWebhook = async (webhookId: number, enable: boolean, webhookName: string) => {
     try {
-      const endpoint = enabled ? "enable" : "disable";
-      const response = await fetch(`/api/integrations/webhooks/${webhookId}/${endpoint}`, {
-        method: "POST",
-      });
+      const endpoint = enable ? "enable" : "disable";
+      const response = await fetch(`/api/integrations/webhooks/${webhookId}/${endpoint}`, { method: "POST" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert(`Webhook ${enabled ? "enabled" : "disabled"} successfully`);
+        toast({ title: enable ? "Webhook Enabled" : "Webhook Disabled", description: `"${webhookName}" ${enable ? "enabled" : "disabled"}.` });
         fetchWebhooksData();
       } else {
-        alert(`Operation failed: ${data.error}`);
+        throw new Error(data.error || "Operation failed");
       }
-    } catch (error) {
-      console.error("Operation failed:", error);
-      alert("Operation failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Operation failed";
+      toast({ title: "Operation Failed", description: message, variant: "destructive" });
+    }
+  };
+
+  const triggerTestEvent = async (event: string) => {
+    try {
+      const response = await fetch("/api/integrations/webhooks/trigger-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      if (data.success) {
+        toast({ title: "Event Triggered", description: `Test event "${event}" sent to all active webhooks.` });
+      } else {
+        throw new Error(data.error || "Trigger failed");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Trigger failed";
+      toast({ title: "Trigger Failed", description: message, variant: "destructive" });
     }
   };
 
@@ -156,13 +189,8 @@ export default function WebhooksIntegrationPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading webhooks integration...</p>
-          </div>
-        </div>
+      <div className="container mx-auto py-8 flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -220,6 +248,7 @@ export default function WebhooksIntegrationPage() {
                 <Input
                   id="webhook-secret"
                   type="password"
+                  autoComplete="off"
                   placeholder="Leave blank to auto-generate"
                   value={webhookSecret}
                   onChange={(e) => setWebhookSecret(e.target.value)}
@@ -231,18 +260,16 @@ export default function WebhooksIntegrationPage() {
               <div className="grid gap-2">
                 <Label>Events to Subscribe</Label>
                 <div className="space-y-2">
-                  {["order.created", "order.updated", "product.created", "product.updated", "customer.created", "customer.updated"].map((event) => (
+                  {AVAILABLE_EVENTS.map((event) => (
                     <div key={event} className="flex items-center space-x-2">
                       <input
                         type="checkbox"
                         id={`event-${event}`}
                         checked={webhookEvents.includes(event)}
                         onChange={(e) => {
-                          if (e.target.checked) {
-                            setWebhookEvents([...webhookEvents, event]);
-                          } else {
-                            setWebhookEvents(webhookEvents.filter(e => e !== event));
-                          }
+                          setWebhookEvents(prev =>
+                            e.target.checked ? [...prev, event] : prev.filter(ev => ev !== event)
+                          );
                         }}
                       />
                       <Label htmlFor={`event-${event}`} className="text-sm font-normal">
@@ -254,12 +281,8 @@ export default function WebhooksIntegrationPage() {
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={createWebhook}>
-                Create Webhook
-              </Button>
+              <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+              <Button onClick={createWebhook}>Create Webhook</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -272,10 +295,8 @@ export default function WebhooksIntegrationPage() {
             <Webhook className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.summary.total_webhooks || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.summary.active_webhooks || 0} active
-            </p>
+            <div className="text-2xl font-bold">{stats?.summary.total_webhooks ?? 0}</div>
+            <p className="text-xs text-muted-foreground">{stats?.summary.active_webhooks ?? 0} active</p>
           </CardContent>
         </Card>
         <Card>
@@ -284,10 +305,8 @@ export default function WebhooksIntegrationPage() {
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.summary.total_deliveries || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Last 30 days
-            </p>
+            <div className="text-2xl font-bold">{stats?.summary.total_deliveries ?? 0}</div>
+            <p className="text-xs text-muted-foreground">Last 30 days</p>
           </CardContent>
         </Card>
         <Card>
@@ -296,10 +315,8 @@ export default function WebhooksIntegrationPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.summary.success_rate?.toFixed(1) || 0}%</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.summary.successful_deliveries || 0} successful
-            </p>
+            <div className="text-2xl font-bold">{stats?.summary.success_rate?.toFixed(1) ?? 0}%</div>
+            <p className="text-xs text-muted-foreground">{stats?.summary.successful_deliveries ?? 0} successful</p>
           </CardContent>
         </Card>
         <Card>
@@ -309,9 +326,7 @@ export default function WebhooksIntegrationPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">4</div>
-            <p className="text-xs text-muted-foreground">
-              Zapier, Make.com, IFTTT, Custom
-            </p>
+            <p className="text-xs text-muted-foreground">Zapier, Make.com, IFTTT, Custom</p>
           </CardContent>
         </Card>
       </div>
@@ -327,80 +342,66 @@ export default function WebhooksIntegrationPage() {
           <Card>
             <CardHeader>
               <CardTitle>Active Webhooks</CardTitle>
-              <CardDescription>
-                Your configured webhook endpoints
-              </CardDescription>
+              <CardDescription>Your configured webhook endpoints</CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>URL</TableHead>
-                    <TableHead>Events</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Success Rate</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activeWebhooks.map((webhook) => (
-                    <TableRow key={webhook.id}>
-                      <TableCell className="font-medium">
-                        {webhook.name}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-xs truncate">
-                          {webhook.url}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {webhook.events.slice(0, 2).map((event, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
-                              {event.split('.')[0]}
-                            </Badge>
-                          ))}
-                          {webhook.events.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{webhook.events.length - 2}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="default">
-                          Active
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Progress value={webhook.success_rate} className="w-16 mr-2" />
-                          <span className="text-sm">{webhook.success_rate.toFixed(1)}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => testWebhook(webhook.id)}
-                          >
-                            <Play className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleWebhook(webhook.id, false)}
-                          >
-                            Disable
-                          </Button>
-                        </div>
-                      </TableCell>
+              {activeWebhooks.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No active webhooks configured</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>URL</TableHead>
+                      <TableHead>Events</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Success Rate</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {activeWebhooks.map((webhook) => (
+                      <TableRow key={webhook.id}>
+                        <TableCell className="font-medium">{webhook.name}</TableCell>
+                        <TableCell>
+                          <div className="max-w-xs truncate">{webhook.url}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {webhook.events.slice(0, 2).map((event, index) => (
+                              <Badge key={index} variant="outline" className="text-xs">
+                                {event.split('.')[0]}
+                              </Badge>
+                            ))}
+                            {webhook.events.length > 2 && (
+                              <Badge variant="outline" className="text-xs">+{webhook.events.length - 2}</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="default">Active</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <Progress value={webhook.success_rate} className="w-16 mr-2" />
+                            <span className="text-sm">{webhook.success_rate.toFixed(1)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => testWebhook(webhook.id, webhook.name)}>
+                              <Play className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => toggleWebhook(webhook.id, false, webhook.name)}>
+                              Disable
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
 
               {inactiveWebhooks.length > 0 && (
                 <>
@@ -410,34 +411,24 @@ export default function WebhooksIntegrationPage() {
                       <TableRow>
                         <TableHead>Name</TableHead>
                         <TableHead>URL</TableHead>
-                        <TableHead>Disabled</TableHead>
+                        <TableHead>Created</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {inactiveWebhooks.map((webhook) => (
                         <TableRow key={webhook.id}>
-                          <TableCell className="font-medium">
-                            {webhook.name}
-                          </TableCell>
+                          <TableCell className="font-medium">{webhook.name}</TableCell>
                           <TableCell>
-                            <div className="max-w-xs truncate">
-                              {webhook.url}
-                            </div>
+                            <div className="max-w-xs truncate">{webhook.url}</div>
                           </TableCell>
                           <TableCell>
                             {new Date(webhook.created_at).toLocaleDateString()}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleWebhook(webhook.id, true)}
-                              >
-                                Enable
-                              </Button>
-                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => toggleWebhook(webhook.id, true, webhook.name)}>
+                              Enable
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -453,9 +444,7 @@ export default function WebhooksIntegrationPage() {
           <Card>
             <CardHeader>
               <CardTitle>Webhook Statistics</CardTitle>
-              <CardDescription>
-                Delivery performance and event breakdown
-              </CardDescription>
+              <CardDescription>Delivery performance and event breakdown</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -464,45 +453,47 @@ export default function WebhooksIntegrationPage() {
                   <div className="grid gap-4 md:grid-cols-3">
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Total Deliveries</p>
-                      <p className="text-2xl font-bold">{stats?.summary.total_deliveries || 0}</p>
+                      <p className="text-2xl font-bold">{stats?.summary.total_deliveries ?? 0}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Successful</p>
-                      <p className="text-2xl font-bold text-green-600">{stats?.summary.successful_deliveries || 0}</p>
+                      <p className="text-2xl font-bold text-green-600">{stats?.summary.successful_deliveries ?? 0}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Failed</p>
-                      <p className="text-2xl font-bold text-red-600">{stats?.summary.failed_deliveries || 0}</p>
+                      <p className="text-2xl font-bold text-red-600">{stats?.summary.failed_deliveries ?? 0}</p>
                     </div>
                   </div>
-                  <Progress value={stats?.summary.success_rate || 0} className="w-full mt-4" />
+                  <Progress value={stats?.summary.success_rate ?? 0} className="w-full mt-4" />
                 </div>
 
-                <div>
-                  <h3 className="text-lg font-semibold mb-2">Event Breakdown</h3>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Event Type</TableHead>
-                        <TableHead>Total Deliveries</TableHead>
-                        <TableHead>Successful</TableHead>
-                        <TableHead>Success Rate</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {stats?.event_stats && Object.entries(stats.event_stats).map(([event, data]) => (
-                        <TableRow key={event}>
-                          <TableCell className="font-medium">{event}</TableCell>
-                          <TableCell>{data.total}</TableCell>
-                          <TableCell>{data.success}</TableCell>
-                          <TableCell>
-                            {data.total > 0 ? ((data.success / data.total) * 100).toFixed(1) : 0}%
-                          </TableCell>
+                {stats?.event_stats && Object.keys(stats.event_stats).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Event Breakdown</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Event Type</TableHead>
+                          <TableHead>Total Deliveries</TableHead>
+                          <TableHead>Successful</TableHead>
+                          <TableHead>Success Rate</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {Object.entries(stats.event_stats).map(([event, data]) => (
+                          <TableRow key={event}>
+                            <TableCell className="font-medium">{event}</TableCell>
+                            <TableCell>{data.total}</TableCell>
+                            <TableCell>{data.success}</TableCell>
+                            <TableCell>
+                              {data.total > 0 ? ((data.success / data.total) * 100).toFixed(1) : 0}%
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
 
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Retry Failed Deliveries</h3>
@@ -526,16 +517,14 @@ export default function WebhooksIntegrationPage() {
           <Card>
             <CardHeader>
               <CardTitle>Test Webhook Events</CardTitle>
-              <CardDescription>
-                Manually trigger webhook events for testing
-              </CardDescription>
+              <CardDescription>Manually trigger webhook events for testing</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Available Events</h3>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {["order.created", "order.updated", "product.created", "product.updated", "customer.created", "customer.updated"].map((event) => (
+                    {AVAILABLE_EVENTS.map((event) => (
                       <Card key={event}>
                         <CardContent className="pt-6">
                           <div className="flex items-center justify-between">
@@ -548,10 +537,7 @@ export default function WebhooksIntegrationPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => {
-                                // TODO: Implement event triggering
-                                alert(`Would trigger ${event} event`);
-                              }}
+                              onClick={() => triggerTestEvent(event)}
                             >
                               Trigger
                             </Button>

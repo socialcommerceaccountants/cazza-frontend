@@ -8,22 +8,37 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const inter = Inter({ subsets: ["latin"] });
 
-// Create a client for React Query
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes
-      retry: (failureCount, error: any) => {
-        // Don't retry on authentication errors
-        if (error?.status === 401 || error?.status === 403) {
-          return false;
-        }
-        return failureCount < 3;
+function makeQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        gcTime: 10 * 60 * 1000, // 10 minutes
+        retry: (failureCount, error: unknown) => {
+          // Don't retry on authentication errors
+          const status = (error as { status?: number })?.status;
+          if (status === 401 || status === 403) {
+            return false;
+          }
+          return failureCount < 3;
+        },
       },
     },
-  },
-});
+  });
+}
+
+// Singleton for server (module scope is per-request in Next.js App Router edge/node runtimes)
+// For client-side, this is fine as-is since the module is loaded once per browser session
+let browserQueryClient: QueryClient | undefined;
+function getQueryClient() {
+  if (typeof window === 'undefined') {
+    // Server: always create a new client so state isn't shared between requests
+    return makeQueryClient();
+  }
+  // Browser: reuse existing client to preserve cache across navigations
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();
+  return browserQueryClient;
+}
 
 export const metadata: Metadata = {
   title: "Cazza.ai - AI Business Assistant",
@@ -78,7 +93,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={getQueryClient()}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

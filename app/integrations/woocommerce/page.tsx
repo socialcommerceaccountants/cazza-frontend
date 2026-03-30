@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { Store, ShoppingCart, Package, Users, PoundSterling, Globe, Link, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, Store, ShoppingCart, Package, Users, PoundSterling, Globe, Link, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface WooCommerceStore {
   id: number;
@@ -44,6 +45,7 @@ interface WooCommerceStatus {
 }
 
 export default function WooCommerceIntegrationPage() {
+  const { toast } = useToast();
   const [status, setStatus] = useState<WooCommerceStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -53,28 +55,30 @@ export default function WooCommerceIntegrationPage() {
   const [consumerSecret, setConsumerSecret] = useState("");
   const [storeName, setStoreName] = useState("");
   const [connecting, setConnecting] = useState(false);
+  const [disconnectStoreId, setDisconnectStoreId] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetchWooCommerceStatus();
-  }, []);
-
-  const fetchWooCommerceStatus = async () => {
+  const fetchWooCommerceStatus = useCallback(async () => {
     try {
       const response = await fetch("/api/integrations/status?integration_type=woocommerce");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        setStatus(data.data.integrations[0]);
+        setStatus(data.data.integrations[0] ?? null);
       }
-    } catch (error) {
-      console.error("Failed to fetch WooCommerce status:", error);
+    } catch {
+      toast({ title: "Error", description: "Failed to load WooCommerce status.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchWooCommerceStatus();
+  }, [fetchWooCommerceStatus]);
 
   const connectStore = async () => {
     if (!storeUrl || !consumerKey || !consumerSecret) {
-      alert("Please fill in all required fields");
+      toast({ title: "Validation Error", description: "Please fill in all required fields.", variant: "destructive" });
       return;
     }
 
@@ -82,9 +86,7 @@ export default function WooCommerceIntegrationPage() {
     try {
       const response = await fetch("/api/integrations/woocommerce/connect", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           store_url: storeUrl,
           consumer_key: consumerKey,
@@ -92,18 +94,19 @@ export default function WooCommerceIntegrationPage() {
           store_name: storeName,
         }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert("Store connected successfully!");
+        toast({ title: "Store Connected", description: "WooCommerce store connected successfully." });
         setConnectDialogOpen(false);
         resetForm();
         fetchWooCommerceStatus();
       } else {
-        alert(`Connection failed: ${data.error}`);
+        throw new Error(data.error || "Connection failed");
       }
-    } catch (error) {
-      console.error("Connection failed:", error);
-      alert("Connection failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Connection failed";
+      toast({ title: "Connection Failed", description: message, variant: "destructive" });
     } finally {
       setConnecting(false);
     }
@@ -114,45 +117,44 @@ export default function WooCommerceIntegrationPage() {
     try {
       const response = await fetch("/api/integrations/woocommerce/sync", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ store_id: storeId, full_sync: false }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert(`Successfully synced ${data.records_processed} records`);
+        toast({ title: "Sync Complete", description: `Synced ${data.records_processed ?? 0} records.` });
         fetchWooCommerceStatus();
       } else {
-        alert(`Sync failed: ${data.error}`);
+        throw new Error(data.error || "Sync failed");
       }
-    } catch (error) {
-      console.error("Sync failed:", error);
-      alert("Sync failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Sync failed";
+      toast({ title: "Sync Failed", description: message, variant: "destructive" });
     } finally {
       setSyncing(false);
     }
   };
 
-  const disconnectStore = async (storeId: number) => {
-    if (!confirm("Are you sure you want to disconnect this store?")) {
-      return;
-    }
-
+  const confirmDisconnect = async () => {
+    if (disconnectStoreId === null) return;
+    const storeId = disconnectStoreId;
+    setDisconnectStoreId(null);
     try {
       const response = await fetch(`/api/integrations/woocommerce/stores/${storeId}/disconnect`, {
         method: "POST",
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert("Store disconnected successfully");
+        toast({ title: "Disconnected", description: "Store disconnected successfully." });
         fetchWooCommerceStatus();
       } else {
-        alert(`Disconnect failed: ${data.error}`);
+        throw new Error(data.error || "Disconnect failed");
       }
-    } catch (error) {
-      console.error("Disconnect failed:", error);
-      alert("Disconnect failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Disconnect failed";
+      toast({ title: "Disconnect Failed", description: message, variant: "destructive" });
     }
   };
 
@@ -165,13 +167,8 @@ export default function WooCommerceIntegrationPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading WooCommerce integration...</p>
-          </div>
-        </div>
+      <div className="container mx-auto py-8 flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -181,12 +178,26 @@ export default function WooCommerceIntegrationPage() {
 
   return (
     <div className="container mx-auto py-8">
+      {/* Disconnect confirmation dialog */}
+      <Dialog open={disconnectStoreId !== null} onOpenChange={(open) => { if (!open) setDisconnectStoreId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect Store</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to disconnect this WooCommerce store? This will stop syncing data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectStoreId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDisconnect}>Disconnect</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">WooCommerce</h1>
-          <p className="text-muted-foreground">
-            WordPress e-commerce integration with UK VAT support
-          </p>
+          <p className="text-muted-foreground">WordPress e-commerce integration with UK VAT support</p>
         </div>
         <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
           <DialogTrigger asChild>
@@ -198,9 +209,7 @@ export default function WooCommerceIntegrationPage() {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Connect WooCommerce Store</DialogTitle>
-              <DialogDescription>
-                Enter your WooCommerce store details to connect
-              </DialogDescription>
+              <DialogDescription>Enter your WooCommerce store details to connect</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
@@ -211,9 +220,7 @@ export default function WooCommerceIntegrationPage() {
                   value={storeUrl}
                   onChange={(e) => setStoreUrl(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Your WooCommerce store URL (include https://)
-                </p>
+                <p className="text-xs text-muted-foreground">Your WooCommerce store URL (include https://)</p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="store-name">Store Name (Optional)</Label>
@@ -229,34 +236,30 @@ export default function WooCommerceIntegrationPage() {
                 <Input
                   id="consumer-key"
                   type="password"
+                  autoComplete="off"
                   placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                   value={consumerKey}
                   onChange={(e) => setConsumerKey(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  WooCommerce REST API Consumer Key
-                </p>
+                <p className="text-xs text-muted-foreground">WooCommerce REST API Consumer Key</p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="consumer-secret">Consumer Secret *</Label>
                 <Input
                   id="consumer-secret"
                   type="password"
+                  autoComplete="off"
                   placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                   value={consumerSecret}
                   onChange={(e) => setConsumerSecret(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  WooCommerce REST API Consumer Secret
-                </p>
+                <p className="text-xs text-muted-foreground">WooCommerce REST API Consumer Secret</p>
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>
-                Cancel
-              </Button>
+              <Button variant="outline" onClick={() => setConnectDialogOpen(false)}>Cancel</Button>
               <Button onClick={connectStore} disabled={connecting}>
-                {connecting ? "Connecting..." : "Connect Store"}
+                {connecting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Connecting...</> : "Connect Store"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -278,27 +281,21 @@ export default function WooCommerceIntegrationPage() {
                   <ShoppingCart className="h-5 w-5 text-green-500" />
                   <h3 className="font-semibold">Order Sync</h3>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Real-time order synchronization and tracking
-                </p>
+                <p className="text-sm text-muted-foreground">Real-time order synchronisation and tracking</p>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <PoundSterling className="h-5 w-5 text-blue-500" />
                   <h3 className="font-semibold">UK/EU VAT</h3>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Automatic VAT calculation for UK and EU customers
-                </p>
+                <p className="text-sm text-muted-foreground">Automatic VAT calculation for UK and EU customers</p>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Package className="h-5 w-5 text-purple-500" />
                   <h3 className="font-semibold">Product Management</h3>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Product catalog sync and inventory tracking
-                </p>
+                <p className="text-sm text-muted-foreground">Product catalogue sync and inventory tracking</p>
               </div>
             </div>
             <div className="mt-6">
@@ -322,9 +319,7 @@ export default function WooCommerceIntegrationPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{activeStores.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Connected WooCommerce stores
-                </p>
+                <p className="text-xs text-muted-foreground">Connected WooCommerce stores</p>
               </CardContent>
             </Card>
             <Card>
@@ -336,9 +331,7 @@ export default function WooCommerceIntegrationPage() {
                 <div className="text-2xl font-bold">
                   {activeStores.filter(store => store.vat_enabled).length}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Stores with VAT calculation
-                </p>
+                <p className="text-xs text-muted-foreground">Stores with VAT calculation</p>
               </CardContent>
             </Card>
             <Card>
@@ -350,9 +343,7 @@ export default function WooCommerceIntegrationPage() {
                 <div className="text-2xl font-bold">
                   {activeStores.filter(store => store.eu_vat_enabled).length}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Stores with EU VAT handling
-                </p>
+                <p className="text-xs text-muted-foreground">Stores with EU VAT handling</p>
               </CardContent>
             </Card>
             <Card>
@@ -364,9 +355,7 @@ export default function WooCommerceIntegrationPage() {
                 <div className="text-2xl font-bold">
                   {activeStores.filter(store => store.webhook_configured).length}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Stores with real-time webhooks
-                </p>
+                <p className="text-xs text-muted-foreground">Stores with real-time webhooks</p>
               </CardContent>
             </Card>
           </div>
@@ -382,9 +371,7 @@ export default function WooCommerceIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Connected Stores</CardTitle>
-                  <CardDescription>
-                    Your WooCommerce stores and their status
-                  </CardDescription>
+                  <CardDescription>Your WooCommerce stores and their status</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -425,12 +412,8 @@ export default function WooCommerceIntegrationPage() {
                               <Badge variant={store.is_active ? "default" : "secondary"}>
                                 {store.is_active ? "Active" : "Inactive"}
                               </Badge>
-                              {store.vat_enabled && (
-                                <Badge variant="outline" className="w-fit">VAT</Badge>
-                              )}
-                              {store.eu_vat_enabled && (
-                                <Badge variant="outline" className="w-fit">EU VAT</Badge>
-                              )}
+                              {store.vat_enabled && <Badge variant="outline" className="w-fit">VAT</Badge>}
+                              {store.eu_vat_enabled && <Badge variant="outline" className="w-fit">EU VAT</Badge>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -446,7 +429,7 @@ export default function WooCommerceIntegrationPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => disconnectStore(store.id)}
+                                onClick={() => setDisconnectStoreId(store.id)}
                               >
                                 Disconnect
                               </Button>
@@ -466,7 +449,6 @@ export default function WooCommerceIntegrationPage() {
                             <TableHead>Store Name</TableHead>
                             <TableHead>URL</TableHead>
                             <TableHead>Disconnected</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -488,15 +470,6 @@ export default function WooCommerceIntegrationPage() {
                               <TableCell>
                                 {new Date(store.created_at).toLocaleDateString()}
                               </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {/* TODO: Reconnect functionality */}}
-                                >
-                                  Reconnect
-                                </Button>
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -511,9 +484,7 @@ export default function WooCommerceIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>UK & EU VAT Reporting</CardTitle>
-                  <CardDescription>
-                    VAT calculation and reporting for your WooCommerce stores
-                  </CardDescription>
+                  <CardDescription>VAT calculation and reporting for your WooCommerce stores</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
@@ -570,9 +541,7 @@ export default function WooCommerceIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Webhook Configuration</CardTitle>
-                  <CardDescription>
-                    Real-time webhooks for order and product updates
-                  </CardDescription>
+                  <CardDescription>Real-time webhooks for order and product updates</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -585,27 +554,21 @@ export default function WooCommerceIntegrationPage() {
                       </div>
                       <Button>Configure Webhooks</Button>
                     </div>
-                    <Progress value={(activeStores.filter(store => store.webhook_configured).length / activeStores.length) * 100} className="w-full" />
-                    
+                    <Progress
+                      value={activeStores.length > 0
+                        ? (activeStores.filter(store => store.webhook_configured).length / activeStores.length) * 100
+                        : 0}
+                      className="w-full"
+                    />
                     <div className="space-y-2">
                       <h4 className="font-medium">Webhook Events</h4>
                       <div className="grid gap-2 text-sm">
-                        <div className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                          <span>Order created/updated</span>
-                        </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                          <span>Product updates</span>
-                        </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                          <span>Customer updates</span>
-                        </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-                          <span>Inventory changes</span>
-                        </div>
+                        {["Order created/updated", "Product updates", "Customer updates", "Inventory changes"].map((event) => (
+                          <div key={event} className="flex items-center">
+                            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                            <span>{event}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

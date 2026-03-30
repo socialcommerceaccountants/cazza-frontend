@@ -33,9 +33,8 @@ export default function CategorisationTest() {
     setError(null);
     
     try {
-      // Note: In production, this would use proper authentication
-      // For testing, we're making a direct API call
-      const response = await fetch('http://localhost:8000/api/v1/categorise/suggest', {
+      const aiApiUrl = process.env.NEXT_PUBLIC_AI_API_URL ?? 'http://localhost:8000';
+      const response = await fetch(`${aiApiUrl}/api/v1/categorise/suggest`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

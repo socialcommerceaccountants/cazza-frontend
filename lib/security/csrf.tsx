@@ -170,15 +170,11 @@ export class CSRFValidator {
    */
   static generateMockToken(): string {
     const array = new Uint8Array(32);
-    if (typeof window !== 'undefined' && window.crypto) {
-      window.crypto.getRandomValues(array);
-    } else {
-      // Fallback for testing
-      for (let i = 0; i < array.length; i++) {
-        array[i] = Math.floor(Math.random() * 256);
-      }
+    // globalThis.crypto is available in all modern browsers and Node.js 15+
+    if (typeof globalThis.crypto?.getRandomValues !== 'function') {
+      throw new Error('Cryptographically secure random number generation is not available');
     }
-    
+    globalThis.crypto.getRandomValues(array);
     return btoa(String.fromCharCode(...Array.from(array)))
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
@@ -229,9 +225,8 @@ export const useCSRFToken = () => {
       csrfTokenStorage.setToken(newToken);
       setToken(newToken);
       setIsValid(true);
-    } else {
-      console.error('Invalid CSRF token format');
     }
+    // Silently discard invalid tokens — do not log details that could assist attackers
   };
 
   const clearToken = () => {

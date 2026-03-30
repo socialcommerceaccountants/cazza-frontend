@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Calendar, CheckCircle, AlertCircle, Link, FileText, PoundSterling, Building } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Loader2, Calendar, CheckCircle, AlertCircle, Link, FileText, PoundSterling, Building } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 interface QuickBooksRealm {
   realm_id: string;
@@ -37,40 +38,44 @@ interface QuickBooksStatus {
 }
 
 export default function QuickBooksIntegrationPage() {
+  const { toast } = useToast();
   const [status, setStatus] = useState<QuickBooksStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const [disconnectRealmId, setDisconnectRealmId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchQuickBooksStatus();
-  }, []);
-
-  const fetchQuickBooksStatus = async () => {
+  const fetchQuickBooksStatus = useCallback(async () => {
     try {
       const response = await fetch("/api/integrations/status?integration_type=quickbooks");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        setStatus(data.data.integrations[0]);
+        setStatus(data.data.integrations[0] ?? null);
       }
-    } catch (error) {
-      console.error("Failed to fetch QuickBooks status:", error);
+    } catch {
+      toast({ title: "Error", description: "Failed to load QuickBooks status.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    fetchQuickBooksStatus();
+  }, [fetchQuickBooksStatus]);
 
   const getAuthUrl = async () => {
     try {
       const response = await fetch("/api/integrations/quickbooks/auth-url");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      if (data.success) {
-        setAuthUrl(data.auth_url);
-        // Redirect to QuickBooks auth page
+      if (data.success && data.auth_url) {
         window.location.href = data.auth_url;
+      } else {
+        throw new Error(data.error || "No auth URL returned");
       }
-    } catch (error) {
-      console.error("Failed to get auth URL:", error);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to get auth URL";
+      toast({ title: "Connection Failed", description: message, variant: "destructive" });
     }
   };
 
@@ -79,75 +84,83 @@ export default function QuickBooksIntegrationPage() {
     try {
       const response = await fetch("/api/integrations/quickbooks/sync", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ full_sync: false }),
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert(`Successfully synced ${data.records_processed} records`);
+        toast({ title: "Sync Complete", description: `Synced ${data.records_processed ?? 0} records.` });
         fetchQuickBooksStatus();
       } else {
-        alert(`Sync failed: ${data.error}`);
+        throw new Error(data.error || "Sync failed");
       }
-    } catch (error) {
-      console.error("Sync failed:", error);
-      alert("Sync failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Sync failed";
+      toast({ title: "Sync Failed", description: message, variant: "destructive" });
     } finally {
       setSyncing(false);
     }
   };
 
-  const disconnectRealm = async (realmId: string) => {
-    if (!confirm("Are you sure you want to disconnect this QuickBooks company?")) {
-      return;
-    }
-
+  const confirmDisconnect = async () => {
+    if (!disconnectRealmId) return;
+    const realmId = disconnectRealmId;
+    setDisconnectRealmId(null);
     try {
       const response = await fetch(`/api/integrations/quickbooks/realms/${realmId}/disconnect`, {
         method: "POST",
       });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       if (data.success) {
-        alert("Successfully disconnected");
+        toast({ title: "Disconnected", description: "QuickBooks company disconnected." });
         fetchQuickBooksStatus();
       } else {
-        alert(`Disconnect failed: ${data.error}`);
+        throw new Error(data.error || "Disconnect failed");
       }
-    } catch (error) {
-      console.error("Disconnect failed:", error);
-      alert("Disconnect failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Disconnect failed";
+      toast({ title: "Disconnect Failed", description: message, variant: "destructive" });
     }
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">Loading QuickBooks integration...</p>
-          </div>
-        </div>
+      <div className="container mx-auto py-8 flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
     <div className="container mx-auto py-8">
+      {/* Disconnect confirmation dialog */}
+      <Dialog open={!!disconnectRealmId} onOpenChange={(open) => { if (!open) setDisconnectRealmId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Disconnect QuickBooks Company</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to disconnect this QuickBooks company? This will stop syncing data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisconnectRealmId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDisconnect}>Disconnect</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">QuickBooks Online</h1>
-          <p className="text-muted-foreground">
-            UK accounting integration with MTD compliance
-          </p>
+          <p className="text-muted-foreground">UK accounting integration with MTD compliance</p>
         </div>
         <div className="flex items-center space-x-2">
           {status?.is_connected ? (
             <>
               <Button variant="outline" onClick={syncQuickBooks} disabled={syncing}>
-                {syncing ? "Syncing..." : "Sync Now"}
+                {syncing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Syncing...</> : "Sync Now"}
               </Button>
               <Button onClick={getAuthUrl} variant="default">
                 <Link className="mr-2 h-4 w-4" />
@@ -207,7 +220,7 @@ export default function QuickBooksIntegrationPage() {
                 Connect with QuickBooks Online
               </Button>
               <p className="text-xs text-muted-foreground mt-2 text-center">
-                You'll be redirected to QuickBooks to authorize access
+                You'll be redirected to QuickBooks to authorise access
               </p>
             </div>
           </CardContent>
@@ -222,9 +235,7 @@ export default function QuickBooksIntegrationPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{status.details.realms.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  QuickBooks companies
-                </p>
+                <p className="text-xs text-muted-foreground">QuickBooks companies</p>
               </CardContent>
             </Card>
             <Card>
@@ -236,9 +247,7 @@ export default function QuickBooksIntegrationPage() {
                 <div className="text-2xl font-bold">
                   {status.details.uk_compliance.mtd_compliant ? "Yes" : "No"}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Making Tax Digital compliance
-                </p>
+                <p className="text-xs text-muted-foreground">Making Tax Digital compliance</p>
               </CardContent>
             </Card>
             <Card>
@@ -282,9 +291,7 @@ export default function QuickBooksIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>QuickBooks Companies</CardTitle>
-                  <CardDescription>
-                    Your connected QuickBooks Online companies
-                  </CardDescription>
+                  <CardDescription>Your connected QuickBooks Online companies</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Table>
@@ -318,7 +325,7 @@ export default function QuickBooksIntegrationPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => disconnectRealm(realm.realm_id)}
+                              onClick={() => setDisconnectRealmId(realm.realm_id)}
                             >
                               Disconnect
                             </Button>
@@ -335,9 +342,7 @@ export default function QuickBooksIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>UK VAT & MTD Compliance</CardTitle>
-                  <CardDescription>
-                    Making Tax Digital compliance status and VAT information
-                  </CardDescription>
+                  <CardDescription>Making Tax Digital compliance status and VAT information</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
@@ -394,9 +399,7 @@ export default function QuickBooksIntegrationPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Sync History</CardTitle>
-                  <CardDescription>
-                    Recent data synchronization activities
-                  </CardDescription>
+                  <CardDescription>Recent data synchronisation activities</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
@@ -408,10 +411,9 @@ export default function QuickBooksIntegrationPage() {
                         </p>
                       </div>
                       <Button onClick={syncQuickBooks} disabled={syncing}>
-                        {syncing ? "Syncing..." : "Sync Now"}
+                        {syncing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Syncing...</> : "Sync Now"}
                       </Button>
                     </div>
-                    <Progress value={75} className="w-full" />
                     <p className="text-sm text-muted-foreground">
                       Next automatic sync in 2 hours
                     </p>

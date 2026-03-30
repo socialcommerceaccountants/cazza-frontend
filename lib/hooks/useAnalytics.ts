@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { 
   useRevenueData, 
   useCACData, 
@@ -205,27 +205,20 @@ export function useAnalytics(options: UseAnalyticsOptions = {}) {
   }, [revenueQuery, cacQuery, roiQuery, platformQuery, realtimeQuery, updateLastUpdated]);
 
   // Export data function
-  const exportData = useCallback(async (format: 'csv' | 'json' | 'xlsx', dataType: string) => {
-    try {
-      // This would be implemented with the actual export API
-      console.log(`Exporting ${dataType} as ${format}`);
-      // In a real implementation, this would call the analyticsService.exportAnalyticsData
-      return Promise.resolve();
-    } catch (err) {
-      setError(`Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      throw err;
-    }
-  }, [setError]);
+  const exportData = useCallback(async (_format: 'csv' | 'json' | 'xlsx', _dataType: string) => {
+    // TODO: implement via analyticsService.exportAnalyticsData
+    return Promise.resolve();
+  }, []);
 
   // Update connection status based on WebSocket
-  useMemo(() => {
+  useEffect(() => {
     if (websocketQuery.data) {
       setConnectionStatus(websocketQuery.data.connected);
     }
   }, [websocketQuery.data, setConnectionStatus]);
 
   // Update error state
-  useMemo(() => {
+  useEffect(() => {
     if (error) {
       setError(error instanceof Error ? error.message : 'An error occurred');
     } else {
