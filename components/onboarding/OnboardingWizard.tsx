@@ -26,7 +26,7 @@ import {
   Shield,
   Bot,
   Sparkles
-} from "lucide-react";
+} , Zap from "lucide-react";
 
 type OnboardingStep = {
   id: number;

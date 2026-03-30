@@ -127,7 +127,7 @@ export default function CategorisationTest() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="transactionType">Transaction Type</Label>
-              <Select value={transactionType} onValueChange={setTransactionType}>
+              <Select value={transactionType} onValueChange={(value) => setTransactionType(value || 'income')}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>

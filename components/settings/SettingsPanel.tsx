@@ -29,7 +29,7 @@ import {
   CheckCircle,
   AlertCircle,
   Save,
-} from "lucide-react";
+} , Zap from "lucide-react";
 
 interface Integration {
   id: string;

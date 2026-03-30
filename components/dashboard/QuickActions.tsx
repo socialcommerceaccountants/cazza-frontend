@@ -9,7 +9,7 @@ import {
   FileText,
   Zap,
   Users
-} from "lucide-react";
+} , Zap from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface QuickActionsProps {

@@ -31,48 +31,22 @@ export default function RevenueChart({ timeRange = "30d" }: RevenueChartProps) {
   const [isExporting, setIsExporting] = useState(false);
   
   const { data: chartData, metrics, isLoading, error, refetch } = useRevenueAnalytics(timeRange);
+  
+  // Calculate metrics from chart data
+  const totalRevenue = chartData?.reduce((sum, item) => sum + item.revenue, 0) || 0;
+  const totalProfit = chartData?.reduce((sum, item) => sum + item.profit, 0) || 0;
+  const avgGrowth = chartData && chartData.length > 0 
+    ? chartData.reduce((sum, item) => sum + item.growth, 0) / chartData.length 
+    : 0;
 
   const handleExportCSV = () => {
-    if (!chartData) return;
+    if (!chartData || chartData.length === 0) return;
     
     setIsExporting(true);
     const headers = ["Date", "Revenue", "Expenses", "Profit", "Growth (%)"];
     const csvContent = [
       headers.join(","),
-      ...chartData.map(item => [
-        item.date,
-        item.revenue,
-        item.expenses,
-        item.profit,
-        item.growth
-      ].join(","))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `revenue-data-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
-    setIsExporting(false);
-  };
-
-  const handleExportPNG = () => {
-    setIsExporting(true);
-    // In a real implementation, this would use html2canvas or similar
-    setTimeout(() => {
-      alert("PNG export would be implemented with html2canvas in production");
-      setIsExporting(false);
-    }, 500);
-  };
-
-  const handleExportCSV = () => {
-    setIsExporting(true);
-    const headers = ["Date", "Revenue", "Expenses", "Profit", "Growth (%)"];
-    const csvContent = [
-      headers.join(","),
-      ...chartData.map(item => [
+      ...(chartData || []).map(item => [
         item.date,
         item.revenue,
         item.expenses,
@@ -250,17 +224,17 @@ export default function RevenueChart({ timeRange = "30d" }: RevenueChartProps) {
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
                   <Bar dataKey="revenue" fill="hsl(var(--chart-1))" name="Revenue">
-                    {chartData.map((entry, index) => (
+                    {(chartData || []).map((entry, index) => (
                       <Cell key={`revenue-${index}`} fill="hsl(var(--chart-1))" />
                     ))}
                   </Bar>
                   <Bar dataKey="expenses" fill="hsl(var(--chart-2))" name="Expenses">
-                    {chartData.map((entry, index) => (
+                    {(chartData || []).map((entry, index) => (
                       <Cell key={`expenses-${index}`} fill="hsl(var(--chart-2))" />
                     ))}
                   </Bar>
                   <Bar dataKey="profit" fill="hsl(var(--chart-3))" name="Profit">
-                    {chartData.map((entry, index) => (
+                    {(chartData || []).map((entry, index) => (
                       <Cell key={`profit-${index}`} fill="hsl(var(--chart-3))" />
                     ))}
                   </Bar>

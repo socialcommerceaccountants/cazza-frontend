@@ -189,7 +189,7 @@ export default function WooCommerceIntegrationPage() {
           </p>
         </div>
         <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button size="lg">
               <Link className="mr-2 h-4 w-4" />
               Connect Store

@@ -180,7 +180,7 @@ export default function WebhooksIntegrationPage() {
           </p>
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger>
             <Button size="lg">
               <Zap className="mr-2 h-4 w-4" />
               Create Webhook

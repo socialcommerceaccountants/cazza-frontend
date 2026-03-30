@@ -29,7 +29,7 @@ import {
   TrendingUp,
   TrendingDown,
   Clock,
-} from "lucide-react";
+} , Zap from "lucide-react";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 
 interface Anomaly {
